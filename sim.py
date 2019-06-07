@@ -128,10 +128,16 @@ def detect_intersections():
 def merge_drops():
     intersecting_drops = detect_intersections()
     for a, b in intersecting_drops:
+        new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
+
         if a.y < b.y:
-            new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
             drop_array.append(Droplet(a.x,a.y,a.mass + b.mass, new_velocity))
+        else:
+            drop_array.append(Droplet(b.x,b.y,a.mass + b.mass, new_velocity))
+
+        if drop_array.__contains__(a):
             drop_array.remove(a)
+        if drop_array.__contains__(b):
             drop_array.remove(b)
 
 
@@ -233,7 +239,7 @@ if __name__ == '__main__':
         #leave_residual_droplets()
         update_height_map()
         compute_height_map()
-        #merge_drops()
+        merge_drops()
         trim_drops()
         maximum_drop_size = find_max()
 
