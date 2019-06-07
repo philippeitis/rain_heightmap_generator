@@ -38,7 +38,7 @@ class Droplet:
         return math.sqrt(delta_x**2 + delta_y**2) < drop.radius() + self.radius()
 
     def radius(self):
-        return np.cbrt((3 / 2) / math.pi * self.mass / 1000) / scale_factor * width
+        return np.cbrt((3 / 2) / math.pi * self.mass / density_water) / scale_factor * width
 
     def residual_probability(self):
         if self.velocity > 0:
@@ -217,6 +217,9 @@ if __name__ == '__main__':
     parser.add_argument('--width', dest='scale', default=0.3,
                         help='width of height map in meters (default 0.3)')
 
+    parser.add_argument('--w', dest='water', default=1000,
+                        help='density of water, in kg/m^3')
+
     parser.add_argument('--drops', dest='drops', default=5,
                         help='average number of drops per time step')
 
@@ -252,6 +255,7 @@ if __name__ == '__main__':
     height = int(args.h)
     scale_factor = args.scale
 
+    density_water = args.water
     gravity = args.g
     beta = 0.5
 
@@ -266,17 +270,15 @@ if __name__ == '__main__':
 
     drop_array = []
     height_map = np.zeros(shape=(width, height))
-
     for i in range(int(args.steps)):
         add_drops(int(args.drops))
         iterate_over_drops()
-        #leave_residual_droplets()
+        # leave_residual_droplets()
         update_height_map()
         compute_height_map()
         merge_drops()
         trim_drops()
-
-        print("Step " + str(i+1) + " out of " + args.steps + " is complete.")
+        print("\rStep " + str(i+1) + " out of " + args.steps + " is complete.")
 
     if args.name:
         save(args.path+args.name)
