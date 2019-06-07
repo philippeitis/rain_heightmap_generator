@@ -13,6 +13,7 @@ class Droplet:
         self.mass = mass
         self.velocity = velocity
         self.direction = 0
+        self.t_i = 0
 
     def iterate_position(self):
         acceleration = (self.mass * gravity - friction_constant_force)/self.mass
@@ -20,13 +21,16 @@ class Droplet:
         self.direction = choose_direction(self)
         if self.velocity > 0:
             if self.direction == -1:
-                self.x -= math.floor(math.sqrt(self.velocity) * scale_factor * width)
-                self.y += math.floor(math.sqrt(self.velocity) * scale_factor * width)
+                self.x -= math.floor(math.sqrt(self.velocity) / scale_factor * width)
+                self.y += math.floor(math.sqrt(self.velocity) / scale_factor * width)
             if self.direction == 0:
                 self.y += math.floor(self.velocity * scale_factor * width)
             if self.direction == 1:
-                self.x += math.floor(math.sqrt(self.velocity) * scale_factor * width)
-                self.y += math.floor(math.sqrt(self.velocity) * scale_factor * width)
+                self.x += math.floor(math.sqrt(self.velocity) / scale_factor * width)
+                self.y += math.floor(math.sqrt(self.velocity) / scale_factor * width)
+
+            # This determines if we should leave a droplet behind
+            self.t_i += 1
 
     def intersects(self, drop):
         delta_x = self.x - drop.x
@@ -35,6 +39,12 @@ class Droplet:
 
     def radius(self):
         return np.cbrt((3 / 2) / math.pi * self.mass / 1000) / scale_factor * width
+
+    def residual_probability(self):
+        if self.velocity > 0:
+            return min(1,beta * time_step / t_max * min(1, self.t_i / t_max))
+        else:
+            return 0
 
 
 def choose_direction(droplet):
@@ -86,12 +96,21 @@ def add_drops(avg):
 
 def iterate_over_drops():
     for drop in drop_array:
+        ## TODO: handling for fast particles (and streaks of water)
         drop.iterate_position()
 
 
 def leave_residual_droplets():
-    return 0
-    # TODO
+    drops_to_add = []
+    for drop in drop_array:
+        if drop.residual_probability() < random.random():
+            drop.t_i = 0
+            a = random.uniform(0.1,0.3)
+            new_drop_mass = min(m_static, a*drop.mass)
+            drop.mass -= new_drop_mass
+            drops_to_add.append(Droplet(drop.x, drop.y, new_drop_mass, 0))
+
+    drop_array.extend(drops_to_add)
 
 
 def compute_height_map():
@@ -169,22 +188,14 @@ def generate_time_stamp():
     return now.strftime("%m-%d0%Y-%H-%M-%S")
 
 
-def find_max():
-    maximum = 0
-    for x in range(width):
-        for y in range(height):
-            if height_map[x][y] > maximum:
-                maximum = height_map[x][y]
-    return maximum
-
-
 def save(filename):
     from PIL import Image
+    maximum_drop_size = np.amax(height_map)
     im = PIL.Image.new('RGBA', (width, height), 0)
     pixels = im.load()
     for x in range(width):
         for y in range(height):
-            pixel_val = math.floor(height_map[x][y] / maximum_drop_size * 255)
+            pixel_val = math.floor(height_map[x, y] / maximum_drop_size * 255)
             pixels[x, y] = (pixel_val, pixel_val, pixel_val)
 
     if int(args.show) == 1:
@@ -197,7 +208,7 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(description='Create the height map for rain on a surface.')
-    parser.add_argument('steps')
+    parser.add_argument('steps') # around 50 time steps is good
 
     parser.add_argument('--imw', dest='w', default=720,
                         help='width of height map')
@@ -264,7 +275,6 @@ if __name__ == '__main__':
         compute_height_map()
         merge_drops()
         trim_drops()
-        maximum_drop_size = find_max()
 
         print("Step " + str(i+1) + " out of " + args.steps + " is complete.")
 
