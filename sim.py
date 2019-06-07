@@ -107,12 +107,9 @@ def smooth_height_map():
     height_map = ndimage.convolve(height_map, kernel, mode='constant', cval=0)
 
 
-
 def floor_water():
-    for x in range(width):
-        for y in range(height):
-            if height_map[x][y] < 0.1:
-                height_map[x][y] = 0.0
+    height_map[height_map < 0.2] = 0.0
+
 
 
 def detect_intersections():
@@ -132,6 +129,7 @@ def merge_drops():
         if a in drop_array and b in drop_array:
             drop_array.remove(a)
             drop_array.remove(b)
+
             new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
 
             if a.y < b.y:
