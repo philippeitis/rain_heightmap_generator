@@ -6,28 +6,6 @@ import numpy as np
 import random
 from scipy import ndimage
 
-time_step = 0.01
-
-# constants
-gravity = 9.8
-
-# max time for drops to split
-t_max = time_step * 4
-# may need adjustment
-beta = 0.5
-
-average_mass = 0.000034   # in kg
-deviation_mass = 0.000005 # normally distributed
-
-# percentage of drops that are created as static
-m_static_below = 0.8
-drop_array = []
-
-# mass at which drops do not move
-m_static = average_mass + deviation_mass * st.norm.ppf(m_static_below)
-friction_constant_force = m_static * gravity
-
-
 class Droplet:
     def __init__(self, x, y, mass, velocity):
         self.x = x
@@ -50,25 +28,59 @@ class Droplet:
                 self.x += math.floor(math.sqrt(self.velocity) * scale_factor * width)
                 self.y += math.floor(math.sqrt(self.velocity) * scale_factor * width)
 
-    def intersects(self,drop):
-        drop_radius = np.cbrt((3 / 2) / math.pi * drop.mass / 1000) / scale_factor * width
-        self_radius = np.cbrt((3 / 2) / math.pi * self.mass / 1000) / scale_factor * width
-
+    def intersects(self, drop):
         delta_x = self.x - drop.x
         delta_y = self.y - drop.y
-        return math.sqrt(delta_x**2 + delta_y**2) < drop_radius + self_radius
+        return math.sqrt(delta_x**2 + delta_y**2) < drop.radius() + self.radius()
+
+    def radius(self):
+        return np.cbrt((3 / 2) / math.pi * self.mass / 1000) / scale_factor * width
 
 
 def choose_direction(droplet):
-    import random
-    region_scan_size = droplet.mass
-    return random.randint(-1,2)
+    radius = math.floor(droplet.radius())
+    start_y = droplet.y + radius
+    end_y = start_y + radius * 2
+    x_1 = droplet.x + radius * 3
+    x_2 = droplet.x + radius
+    x_3 = droplet.x - radius
+    x_4 = droplet.x - 3 * radius
+
+    sum1 = 0
+
+    for x in range(x_1, x_2+1):
+        for y in range(start_y, end_y+1):
+            if 0 <= x < width and 0 <= y < height:
+                sum1 += height_map[x, y]
+
+    sum2 = 0
+
+    for x in range(x_2, x_3+1):
+        for y in range(start_y, end_y+1):
+            if 0 <= x < width and 0 <= y < height:
+                sum2 += height_map[x, y]
+
+    sum3 = 0
+
+    for x in range(x_3, x_4+1):
+        for y in range(start_y, end_y+1):
+            if 0 <= x < width and 0 <= y < height:
+                sum3 += height_map[x, y]
+
+    if sum1 > sum2 >= sum3:
+        return -1
+    if sum2 > sum1 >= sum3:
+        return 0
+    if sum3 > sum1 >= sum2:
+        return 1
+    else:
+        return random.randint(-1, 1)
 
 
 def add_drops(avg):
-    import random
-    for i in range(avg):
-        drop_to_add = Droplet(random.randint(0, width), random.randint(0, height), np.random.normal(average_mass, deviation_mass, 1),0)
+    for x in range(avg):
+        drop_to_add = Droplet(random.randint(0, width), random.randint(0, height),
+                              np.random.normal(average_mass, deviation_mass, 1), 0)
         drop_array.append(drop_to_add)
 
 
@@ -89,11 +101,11 @@ def compute_height_map():
 
 def update_height_map():
     for drop in drop_array:
-        radius = np.cbrt((3 / 2) / math.pi * drop.mass / 1000) / scale_factor * width
+        radius = drop.radius()
         round_radius = math.floor(radius)
         for y in range(drop.y - round_radius, drop.y + round_radius+1):
-            for x in range(drop.x - round_radius, drop.x + round_radius +1):
-                if (0 < y < height) and (0 < x < width):
+            for x in range(drop.x - round_radius, drop.x + round_radius+1):
+                if (0 <= y < height) and (0 <= x < width):
                     new_height = np.sqrt(radius**2 - (y - drop.y)**2 - (x-drop.x)**2)
                     if height_map[x][y] < new_height:
                         height_map[x][y] = new_height
@@ -111,9 +123,9 @@ def floor_water():
     height_map[height_map < 0.2] = 0.0
 
 
-
 def detect_intersections():
     detections = []
+
     for a in range(len(drop_array)):
         for b in range(a+1,len(drop_array)):
             if drop_array[a].intersects(drop_array[b]):
@@ -138,11 +150,10 @@ def merge_drops():
                 drop_array.append(Droplet(b.x,b.y,a.mass + b.mass, new_velocity))
 
 
-
 def trim_drops():
     drops_to_remove = []
     for drop in drop_array:
-        radius = math.floor(np.cbrt((3 / 2) / math.pi * drop.mass / 1000) / scale_factor * width)
+        radius = drop.radius()
         x = drop.x
         y = drop.y
         if x + radius < 0 or x - radius > width or y + radius < 0 or y - radius > height:
@@ -176,7 +187,9 @@ def save(filename):
             pixel_val = math.floor(height_map[x][y] / maximum_drop_size * 255)
             pixels[x, y] = (pixel_val, pixel_val, pixel_val)
 
-    im.show()
+    if int(args.show) == 1:
+        im.show()
+
     im.save(filename + ".png", 'PNG')
 
 
@@ -196,18 +209,21 @@ if __name__ == '__main__':
     parser.add_argument('--drops', dest='drops', default=5,
                         help='average number of drops per time step')
 
-    parser.add_argument('--min', dest='min', default=5,
+    parser.add_argument('--mmin', dest='m_min',
                         help='minimum mass of droplets (kg)')
-    parser.add_argument('--max', dest='max', default=5,
+    parser.add_argument('--mavg', dest='m_avg', default=0.000034,
+                        help='average mass of drops (kg)')
+    parser.add_argument('--mdev', dest='m_dev', default=0.000005,
+                        help='average mass of drops (kg)')
+    parser.add_argument('--mmax', dest='m_max',
                         help='maximum mass of droplets (kg)')
-
-    parser.add_argument('--g', dest='g', default=9.8,
-                        help='gravitational constant (m/s)')
-
-    parser.add_argument('--mstatic', dest='m_static', default=0.1,
+    parser.add_argument('--mstatic', dest='m_static', default=0.8,
                         help='percentage of drops that do not move ')
 
-    parser.add_argument('--time', dest='time', default=0.01,
+    parser.add_argument('--g', dest='g', default=9.81,
+                        help='gravitational constant (m/s)')
+
+    parser.add_argument('--time', dest='time', default=0.005,
                         help='duration of each time step (in seconds)')
 
     parser.add_argument('--path', dest='path', default="./",
@@ -216,6 +232,9 @@ if __name__ == '__main__':
     parser.add_argument('--name', dest='name',
                         help='output file name')
 
+    parser.add_argument('--s', dest='show', default=0,
+                        help='flag to have image automatically appear once image is generated.')
+
     args = parser.parse_args()
 
     width = int(args.w)
@@ -223,14 +242,20 @@ if __name__ == '__main__':
     scale_factor = args.scale
 
     gravity = args.g
+    beta = 0.5
+
+    average_mass = args.m_avg
+    deviation_mass = args.m_dev  # normally distributed
+
     m_static = average_mass + deviation_mass * st.norm.ppf(args.m_static)
     friction_constant_force = m_static * gravity
 
     time_step = args.time
     t_max = time_step * 4
+
+    drop_array = []
     height_map = np.zeros(shape=(width, height))
 
-    name = generate_time_stamp()
     for i in range(int(args.steps)):
         add_drops(int(args.drops))
         iterate_over_drops()
