@@ -95,22 +95,29 @@ def update_height_map():
                 if (0 < y < height) and (0 < x < width):
                     new_height = np.sqrt(radius**2 - (y - drop.y)**2 - (x-drop.x)**2)
                     if heightmap[x][y] < new_height:
-                        heightmap[y][x] = new_height
+                        heightmap[x][y] = new_height
 
 
 def smooth_height_map():
-    for y in range(1,height-1):
-        for x in range(1,width-1):
-            heightmap[y][x] = (heightmap[y-1][x-1] + heightmap[y-1][x] + heightmap[y-1][x+1]
-                + heightmap[y][x-1] + heightmap[y][x] + heightmap[y][x+1]
-                + heightmap[y+1][x-1] + heightmap[y+1][x] + heightmap[y+1][x+1])/9
+    new_height_map = []
+    for i in range(width):
+        row = []
+        for j in range(height):
+            row.append(0.0)
+        new_height_map.append(row)
+
+    for x in range(1, width - 1):
+        for y in range(1, height - 1):
+            heightmap[x][y] = (heightmap[x-1][y-1] + heightmap[y-1][y] + heightmap[x-1][y+1]
+                + heightmap[x][y-1] + heightmap[x][y] + heightmap[x][y+1]
+                + heightmap[x+1][y-1] + heightmap[x+1][y] + heightmap[x+1][y+1])/9
 
 
 def floor_water():
-    for y in range(height):
-        for x in range(width):
-            if heightmap[y][x] < 0.1:
-                heightmap[y][x] = 0.0
+    for x in range(width):
+        for y in range(height):
+            if heightmap[x][y] < 0.1:
+                heightmap[x][y] = 0.0
 
 
 def detect_intersections():
@@ -118,11 +125,19 @@ def detect_intersections():
     for a in range(len(drop_array)):
         for b in range(a,len(drop_array)):
             if a.intersects(b):
-                detections.append(a,b)
+                detections.append(a, b)
+
+    return detections
+
+
 def merge_drops():
     intersecting_drops = detect_intersections()
-
-    return 0
+    for a, b in intersecting_drops:
+        if a.y < b.y:
+            new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
+            drop_array.append(Droplet(a.x,a.y,a.mass + b.mass, new_velocity))
+            drop_array.remove(a)
+            drop_array.remove(b)
 
 
 def trim_drops():
@@ -148,8 +163,8 @@ def find_max():
     maximum = 0
     for y in range(height):
         for x in range(width):
-            if heightmap[y][x] > maximum:
-                maximum = heightmap[y][x]
+            if heightmap[x][y] > maximum:
+                maximum = heightmap[x][y]
     return maximum
 
 
@@ -159,13 +174,13 @@ def save(filename):
     pixels = im.load()
     for x in range(width):
         for y in range(height):
-            pixel_val = math.floor(heightmap[y][x] / maximum_drop_size * 255)
+            pixel_val = math.floor(heightmap[x][y] / maximum_drop_size * 255)
             pixels[x, y] = (pixel_val, pixel_val, pixel_val)
     im.save(filename + ".png", 'PNG')
+    im.show()
 
 
 if __name__ == '__main__':
-    import sys
     import argparse
 
     parser = argparse.ArgumentParser(description='Create the height map for rain on a surface.')
@@ -214,9 +229,9 @@ if __name__ == '__main__':
     time_step = args.time
     t_max = time_step * 4
     heightmap = []
-    for i in range(height):
+    for i in range(width):
         row = []
-        for j in range(width):
+        for j in range(height):
             row.append(0.0)
         heightmap.append(row)
 
