@@ -4,6 +4,7 @@ import math
 import scipy.stats as st
 import numpy as np
 import random
+from scipy import ndimage
 
 time_step = 0.01
 
@@ -90,42 +91,36 @@ def update_height_map():
     for drop in drop_array:
         radius = np.cbrt((3 / 2) / math.pi * drop.mass / 1000) / scale_factor * width
         round_radius = math.floor(radius)
-        for y in range(drop.y - round_radius, drop.y + round_radius):
-            for x in range(drop.x - round_radius, drop.x + round_radius):
+        for y in range(drop.y - round_radius, drop.y + round_radius+1):
+            for x in range(drop.x - round_radius, drop.x + round_radius +1):
                 if (0 < y < height) and (0 < x < width):
                     new_height = np.sqrt(radius**2 - (y - drop.y)**2 - (x-drop.x)**2)
-                    if heightmap[x][y] < new_height:
-                        heightmap[x][y] = new_height
+                    if height_map[x][y] < new_height:
+                        height_map[x][y] = new_height
 
 
 def smooth_height_map():
-    new_height_map = []
-    for i in range(width):
-        row = []
-        for j in range(height):
-            row.append(0.0)
-        new_height_map.append(row)
+    kernel = np.array([[1/9, 1/9, 1/9],
+                       [1/9, 1/9, 1/9],
+                       [1/9, 1/9, 1/9]])
+    global height_map
+    height_map = ndimage.convolve(height_map, kernel, mode='constant', cval=0)
 
-    for x in range(1, width - 1):
-        for y in range(1, height - 1):
-            heightmap[x][y] = (heightmap[x-1][y-1] + heightmap[y-1][y] + heightmap[x-1][y+1]
-                + heightmap[x][y-1] + heightmap[x][y] + heightmap[x][y+1]
-                + heightmap[x+1][y-1] + heightmap[x+1][y] + heightmap[x+1][y+1])/9
 
 
 def floor_water():
     for x in range(width):
         for y in range(height):
-            if heightmap[x][y] < 0.1:
-                heightmap[x][y] = 0.0
+            if height_map[x][y] < 0.1:
+                height_map[x][y] = 0.0
 
 
 def detect_intersections():
     detections = []
     for a in range(len(drop_array)):
         for b in range(a,len(drop_array)):
-            if a.intersects(b):
-                detections.append(a, b)
+            if drop_array[a].intersects(drop_array[b]):
+                detections.append((drop_array[a], drop_array[b]))
 
     return detections
 
@@ -161,10 +156,10 @@ def generate_time_stamp():
 
 def find_max():
     maximum = 0
-    for y in range(height):
-        for x in range(width):
-            if heightmap[x][y] > maximum:
-                maximum = heightmap[x][y]
+    for x in range(width):
+        for y in range(height):
+            if height_map[x][y] > maximum:
+                maximum = height_map[x][y]
     return maximum
 
 
@@ -174,10 +169,11 @@ def save(filename):
     pixels = im.load()
     for x in range(width):
         for y in range(height):
-            pixel_val = math.floor(heightmap[x][y] / maximum_drop_size * 255)
+            pixel_val = math.floor(height_map[x][y] / maximum_drop_size * 255)
             pixels[x, y] = (pixel_val, pixel_val, pixel_val)
-    im.save(filename + ".png", 'PNG')
+
     im.show()
+    im.save(filename + ".png", 'PNG')
 
 
 if __name__ == '__main__':
@@ -207,7 +203,7 @@ if __name__ == '__main__':
     parser.add_argument('--mstatic', dest='m_static', default=0.1,
                         help='percentage of drops that do not move ')
 
-    parser.add_argument('--time', dest='time', default=0.05,
+    parser.add_argument('--time', dest='time', default=0.01,
                         help='duration of each time step (in seconds)')
 
     parser.add_argument('--path', dest='path', default="./",
@@ -228,12 +224,7 @@ if __name__ == '__main__':
 
     time_step = args.time
     t_max = time_step * 4
-    heightmap = []
-    for i in range(width):
-        row = []
-        for j in range(height):
-            row.append(0.0)
-        heightmap.append(row)
+    height_map = np.zeros(shape=(width, height))
 
     name = generate_time_stamp()
     for i in range(int(args.steps)):
