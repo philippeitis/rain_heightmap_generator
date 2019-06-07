@@ -118,7 +118,7 @@ def floor_water():
 def detect_intersections():
     detections = []
     for a in range(len(drop_array)):
-        for b in range(a,len(drop_array)):
+        for b in range(a+1,len(drop_array)):
             if drop_array[a].intersects(drop_array[b]):
                 detections.append((drop_array[a], drop_array[b]))
 
@@ -127,18 +127,18 @@ def detect_intersections():
 
 def merge_drops():
     intersecting_drops = detect_intersections()
+
     for a, b in intersecting_drops:
-        new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
-
-        if a.y < b.y:
-            drop_array.append(Droplet(a.x,a.y,a.mass + b.mass, new_velocity))
-        else:
-            drop_array.append(Droplet(b.x,b.y,a.mass + b.mass, new_velocity))
-
-        if drop_array.__contains__(a):
+        if a in drop_array and b in drop_array:
             drop_array.remove(a)
-        if drop_array.__contains__(b):
             drop_array.remove(b)
+            new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
+
+            if a.y < b.y:
+                drop_array.append(Droplet(a.x,a.y,a.mass + b.mass, new_velocity))
+            else:
+                drop_array.append(Droplet(b.x,b.y,a.mass + b.mass, new_velocity))
+
 
 
 def trim_drops():
