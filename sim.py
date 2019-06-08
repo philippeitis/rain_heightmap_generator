@@ -18,23 +18,29 @@ class Droplet:
             self.generate_hemispheres()
 
     def generate_hemispheres(self):
+        # TODO: fix this code ot be faster
         self.hemispheres = [(self.x,self.y)]
         num_hemispheres = random.randint(1, max_hemispheres)
-
+        directions = (1,2,3,4)
+        next_dirs = directions
         while len(self.hemispheres) < num_hemispheres:
             old_x, old_y = self.hemispheres[-1]
             new_x, new_y = 0,0
-            direction = random.randint(1, 4)
+            direction = random.choice(next_dirs)
             if direction == 1:  # Down
+                next_dirs = (1, 2, 4)
                 new_y = old_y - 1
                 new_x = old_x
             if direction == 2:  # Left
+                next_dirs = (1, 2, 3)
                 new_y = old_y
                 new_x = old_x - 1
             if direction == 3:  # Up
+                next_dirs = (2, 3, 4)
                 new_y = old_y + 1
                 new_x = old_x
             if direction == 4:  # Right
+                next_dirs = (1, 3, 4)
                 new_y = old_y
                 new_x = old_x + 1
 
@@ -163,17 +169,16 @@ def iterate_over_drops():
 
 
 def leave_residual_droplets():
+    # TODO: fix this code to be faster
     drops_to_add = []
     for drop in drop_array:
-        if drop.residual_probability() < np.random.uniform():
-            global residual_count
-            residual_count += 1
-            print("Adding residual" + str(residual_count))
-            drop.t_i = 0
-            a = np.random.uniform(0.1, 0.3)
-            new_drop_mass = min(m_static, a*drop.mass)
-            drop.mass -= new_drop_mass
-            drops_to_add.append(Droplet(drop.x, drop.y, new_drop_mass, 0))
+        if drop.mass > m_static:
+            if drop.residual_probability() < np.random.uniform():
+                drop.t_i = 0
+                a = np.random.uniform(0.1, 0.3)
+                new_drop_mass = min(m_static, a*drop.mass)
+                drop.mass -= new_drop_mass
+                drops_to_add.append(Droplet(drop.x, drop.y, new_drop_mass, 0))
 
     drop_array.extend(drops_to_add)
 
@@ -427,7 +432,6 @@ if __name__ == '__main__':
         name = generate_time_stamp()
 
     for i in range(int(args.runs)):
-        residual_count = 0
         file_name = ""
         drop_array = []
         height_map = np.zeros(shape=(width, height))
