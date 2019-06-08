@@ -14,12 +14,18 @@ class Droplet:
         self.velocity = velocity
         self.direction = 0
         self.t_i = 0
+        self.hemispheres = [] # (x,y) tuples (could add z to represent share of mass)
+        if mass < m_static and hemispheres_enabled:
+             self.generate_hemispheres()
+
+    def generate_hemispheres(self):
+        num_hemispheres = random.randint(1,max_hemispheres)
 
     def iterate_position(self):
         acceleration = (self.mass * gravity - friction_constant_force)/self.mass
         self.velocity = self.velocity + acceleration * time_step
-        self.direction = choose_direction(self)
         if self.velocity > 0:
+            self.direction = choose_direction(self)
             if self.direction == -1:
                 self.x -= math.floor(math.sqrt(self.velocity) / scale_factor * width)
                 self.y += math.floor(math.sqrt(self.velocity) / scale_factor * width)
@@ -89,8 +95,8 @@ def choose_direction(droplet):
 
 def add_drops(avg):
     for x in range(avg):
-        drop_to_add = Droplet(random.randint(0, width), random.randint(0, height),
-                              np.random.normal(average_mass, deviation_mass, 1), 0)
+        mass = min(m_max,max(m_min,np.random.normal(average_mass, deviation_mass, 1)))
+        drop_to_add = Droplet(random.randint(0, width), random.randint(0, height), mass, 0)
         drop_array.append(drop_to_add)
 
 
@@ -158,15 +164,18 @@ def merge_drops():
 
     for a, b in intersecting_drops:
         if a in drop_array and b in drop_array:
-            drop_array.remove(a)
-            drop_array.remove(b)
 
             new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
 
             if a.y < b.y:
-                drop_array.append(Droplet(a.x,a.y,a.mass + b.mass, new_velocity))
+                a.velocity = new_velocity
+                a.mass += b.mass
+                drop_array.remove(b)
+
             else:
-                drop_array.append(Droplet(b.x,b.y,a.mass + b.mass, new_velocity))
+                b.velocity = new_velocity
+                b.mass += a.mass
+                drop_array.remove(a)
 
 
 def trim_drops():
@@ -188,20 +197,33 @@ def generate_time_stamp():
     return now.strftime("%m-%d0%Y-%H-%M-%S")
 
 
-def save(filename):
-    from PIL import Image
-    maximum_drop_size = np.amax(height_map)
-    im = PIL.Image.new('RGBA', (width, height), 0)
-    pixels = im.load()
-    for x in range(width):
-        for y in range(height):
-            pixel_val = math.floor(height_map[x, y] / maximum_drop_size * 255)
-            pixels[x, y] = (pixel_val, pixel_val, pixel_val)
+def save(filename, fformat):
+    if fformat == "txt":
+        np.savetxt(filename + ".txt", height_map, delimiter=",")
+    elif fformat == "png":
+        from PIL import Image
+        maximum_drop_size = np.amax(height_map)
+        im = PIL.Image.new('RGBA', (width, height), 0)
+        pixels = im.load()
+        for x in range(width):
+            for y in range(height):
+                pixel_val = math.floor(height_map[x, y] / maximum_drop_size * 255)
+                pixels[x, y] = (pixel_val, pixel_val, pixel_val)
 
-    if int(args.show) == 1:
-        im.show()
+        if int(args.show) == 1:
+            im.show()
 
-    im.save(filename + ".png", 'PNG')
+        im.save(filename + ".png", 'PNG')
+
+
+def set_up_directories():
+    import os
+    if args.path != "./":
+        try:
+            os.mkdir(args.path)
+            print("Directory created.")
+        except FileExistsError:
+            print("Directory already exists.")
 
 
 if __name__ == '__main__':
@@ -222,22 +244,27 @@ if __name__ == '__main__':
 
     parser.add_argument('--drops', dest='drops', default=5,
                         help='average number of drops per time step')
+    parser.add_argument('--residual_drops', dest='leave_residuals', default=False,
+                        help='enable residual drops')
 
-    parser.add_argument('--mmin', dest='m_min',
+    parser.add_argument('--mmin', dest='m_min', default=0.000001,
                         help='minimum mass of droplets (kg)')
     parser.add_argument('--mavg', dest='m_avg', default=0.000034,
                         help='average mass of drops (kg)')
-    parser.add_argument('--mdev', dest='m_dev', default=0.000005,
+    parser.add_argument('--mdev', dest='m_dev', default=0.000016,
                         help='average mass of drops (kg)')
-    parser.add_argument('--mmax', dest='m_max',
+    parser.add_argument('--mmax', dest='m_max', default=1,
                         help='maximum mass of droplets (kg)')
     parser.add_argument('--mstatic', dest='m_static', default=0.8,
                         help='percentage of drops that do not move ')
-
+    parser.add_argument('--hemispheres', dest='enable_hemispheres', default=True,
+                        help='enable hemisphere based drops')
+    parser.add_argument('--numh', dest='max_hemispheres', default=5,
+                        help='maximum number of hemispheres per drop')
     parser.add_argument('--g', dest='g', default=9.81,
                         help='gravitational constant (m/s)')
 
-    parser.add_argument('--time', dest='time', default=0.005,
+    parser.add_argument('--time', dest='time', default=0.001,
                         help='duration of each time step (in seconds)')
 
     parser.add_argument('--path', dest='path', default="./",
@@ -249,6 +276,9 @@ if __name__ == '__main__':
     parser.add_argument('--s', dest='show', default=0,
                         help='flag to have image automatically appear once image is generated.')
 
+    parser.add_argument('--f', dest='format', default="png",
+                        help='file format (txt file with comma seperated rows), or png.')
+
     args = parser.parse_args()
 
     width = int(args.w)
@@ -259,9 +289,12 @@ if __name__ == '__main__':
     gravity = args.g
     beta = 0.5
 
+    m_min = args.m_min
+    m_max = args.m_max
     average_mass = args.m_avg
     deviation_mass = args.m_dev  # normally distributed
-
+    hemispheres_enabled = bool(args.enable_hemispheres)
+    max_hemispheres = args.max_hemispheres
     m_static = average_mass + deviation_mass * st.norm.ppf(args.m_static)
     friction_constant_force = m_static * gravity
 
@@ -270,17 +303,26 @@ if __name__ == '__main__':
 
     drop_array = []
     height_map = np.zeros(shape=(width, height))
+
+    temp_name = "temp"
+    temp_path = "./temp/"
+
+    set_up_directories()
+
     for i in range(int(args.steps)):
         add_drops(int(args.drops))
         iterate_over_drops()
-        # leave_residual_droplets()
+        if bool(args.leave_residuals):
+            leave_residual_droplets()
         update_height_map()
         compute_height_map()
         merge_drops()
         trim_drops()
         print("\rStep " + str(i+1) + " out of " + args.steps + " is complete.")
 
-    if args.name:
-        save(args.path+args.name)
-    else:
-        save(args.path + generate_time_stamp())
+    if args.format != "none":
+
+        if args.name:
+            save(args.path+args.name, args.format)
+        else:
+            save(args.path + generate_time_stamp(), args.format)
