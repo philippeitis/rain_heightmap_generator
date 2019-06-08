@@ -81,16 +81,16 @@ class Droplet:
             return 0
 
     def get_lowest_y(self):
-        return min(self.hemispheres, key=lambda t: t[1])[1] - math.floor(self.radius())
+        return min(self.hemispheres, key=lambda t: t[1])[1] - math.floor(self.radius()) - 1
 
     def get_highest_y(self):
-        return max(self.hemispheres, key=lambda t: t[1])[1] + math.floor(self.radius())
+        return max(self.hemispheres, key=lambda t: t[1])[1] + math.floor(self.radius()) + 1
 
     def get_lowest_x(self):
-        return min(self.hemispheres, key=lambda t: t[0])[0] - math.floor(self.radius())
+        return min(self.hemispheres, key=lambda t: t[0])[0] - math.floor(self.radius()) - 1
 
     def get_highest_x(self):
-        return max(self.hemispheres, key=lambda t: t[0])[0] + math.floor(self.radius())
+        return max(self.hemispheres, key=lambda t: t[0])[0] + math.floor(self.radius()) + 1
 
     def get_height(self, x, y):
         if len(self.hemispheres) >= 1:
@@ -147,6 +147,8 @@ def choose_direction(droplet):
         return random.randint(-1, 1)
 
 
+# Adds avg drops, placed randomly on the height map, with randomly generated
+# masses bounded by m_min and m_max
 def add_drops(avg):
     for x in range(avg):
         mass = min(m_max,max(m_min,np.random.normal(average_mass, deviation_mass, 1)))
@@ -163,9 +165,12 @@ def iterate_over_drops():
 def leave_residual_droplets():
     drops_to_add = []
     for drop in drop_array:
-        if drop.residual_probability() < random.random():
+        if drop.residual_probability() < np.random.uniform():
+            global residual_count
+            residual_count += 1
+            print("Adding residual" + str(residual_count))
             drop.t_i = 0
-            a = random.uniform(0.1,0.3)
+            a = np.random.uniform(0.1, 0.3)
             new_drop_mass = min(m_static, a*drop.mass)
             drop.mass -= new_drop_mass
             drops_to_add.append(Droplet(drop.x, drop.y, new_drop_mass, 0))
@@ -302,63 +307,73 @@ if __name__ == '__main__':
     parser.add_argument('steps') # around 50 time steps is good
 
     parser.add_argument('--imw', dest='w', default=720,
-                        help='width of height map')
+                        help='Sets the width of the height map and the output file.')
     parser.add_argument('--imh', dest='h', default=480,
-                        help='height of height map')
+                        help='Sets the height of the height map and the output file.')
     parser.add_argument('--width', dest='scale', default=0.3,
                         help='width of height map in meters (default 0.3)')
 
     parser.add_argument('--w', dest='water', default=1000,
-                        help='density of water, in kg/m^3')
+                        help='Sets the density of water, in kg/m^3')
 
     parser.add_argument('--drops', dest='drops', default=5,
-                        help='average number of drops per time step')
+                        help='Sets the number of drops added to the height map '
+                             'each time step.')
 
     parser.add_argument('--residual_drops', dest='leave_residuals', default=False,
-                        help='enable residual drops')
+                        help='Enables leaving residual drops')
+    parser.add_argument('--beta', dest='beta', default=0.5,
+                        help='Sets value b in equation used to determine if drop should be left or not')
     parser.add_argument('--kernel', dest='kernel', default="dwn",
                         help='Type of kernel used in smoothing step. '
                              '(dwn for downward trending, avg for averaging kernel)')
 
     parser.add_argument('--mmin', dest='m_min', default=0.000001,
-                        help='minimum mass of droplets (kg)')
+                        help='Minimum mass of droplets (kg)')
     parser.add_argument('--mavg', dest='m_avg', default=0.000034,
-                        help='average mass of drops (kg)')
+                        help='Average mass of drops (kg)')
     parser.add_argument('--mdev', dest='m_dev', default=0.000016,
-                        help='average mass of drops (kg)')
+                        help='Average deviation of drops (kg). Higher '
+                             'values create more diverse drop sizes.')
     parser.add_argument('--mmax', dest='m_max', default=1,
-                        help='maximum mass of droplets (kg)')
+                        help='Maximum mass of droplets (kg)')
     parser.add_argument('--mstatic', dest='m_static', default=0.8,
-                        help='percentage of drops that do not move ')
+                        help='Sets the percentage of drops that are static.')
 
     parser.add_argument('--hemispheres', dest='enable_hemispheres', default=True,
-                        help='enable hemisphere based drops')
+                        help='Enables drops with multiple hemispheres (on by default)')
     parser.add_argument('--numh', dest='max_hemispheres', default=5,
-                        help='maximum number of hemispheres per drop')
+                        help='Maximum number of hemispheres per drop. '
+                             'Performance drops off rapidly after 15 hemispheres.')
 
     parser.add_argument('--g', dest='g', default=9.81,
-                        help='gravitational constant (m/s)')
+                        help='Gravitational constant (m/s)')
 
     parser.add_argument('--time', dest='time', default=0.001,
-                        help='duration of each time step (in seconds)')
+                        help='Duration of each time step (in seconds)')
 
     parser.add_argument('--path', dest='path', default="./",
-                        help='output file path. if --name is not defined, defaults to date-time string')
+                        help='Output file path. If not defined, program defaults to same folder.')
 
     parser.add_argument('--name', dest='name',
-                        help='output file name')
+                        help='Output file name. If not defined, program defaults to using date-time string.')
 
     parser.add_argument('--s', dest='show', default=0,
-                        help='flag to have image automatically appear once image is generated.')
+                        help='Show image on program completion..')
 
     parser.add_argument('--f', dest='format', default="png",
-                        help='file format (txt file with comma seperated rows), or png.')
+                        help='Output file format (png, txt, or npy).')
     parser.add_argument('--border', dest='border', default=0,
-                        help='all values within border pixels of the edge will be 0')
+                        help='Sets all values within border pixels of the edge to 0')
 
     parser.add_argument('--runs', dest='runs', default=1,
-                        help='number of images to create.')
+                        help='Will execute the program with the given parameters repeatedly.')
 
+    parser.add_argument('--verbose', dest='verbose', default=1,
+                        help='Will output detailed information on program operation. '
+                        't : time to execute each step, '
+                        'd : number of droplets in each step, '
+                        'a : average mass of droplets in each step.')
     args = parser.parse_args()
 
     width = int(args.w)
@@ -386,6 +401,14 @@ if __name__ == '__main__':
 
     set_up_directories()
 
+    verbose = args.verbose
+    show_time = "t" in verbose
+    show_drop_count = "d" in verbose
+    show_average_drop_mass = "a" in verbose
+
+    if show_time:
+        import time
+
     kernel = np.array(1)
 
     if args.kernel == "dwn":
@@ -404,7 +427,7 @@ if __name__ == '__main__':
         name = generate_time_stamp()
 
     for i in range(int(args.runs)):
-
+        residual_count = 0
         file_name = ""
         drop_array = []
         height_map = np.zeros(shape=(width, height))
@@ -418,6 +441,9 @@ if __name__ == '__main__':
             file_name = name
 
         for ii in range(int(args.steps)):
+            if show_time:
+                start_time = time.time()
+
             add_drops(int(args.drops))
             iterate_over_drops()
             if bool(args.leave_residuals):
@@ -426,7 +452,20 @@ if __name__ == '__main__':
             compute_height_map()
             merge_drops()
             trim_drops()
-            print("\rStep " + str(ii+1) + " out of " + args.steps + " is complete.")
+            output_string = "\rStep " + str(ii+1) + " out of " + args.steps + " is complete."
+
+            if show_time:
+                elapsed_time = time.time()-start_time
+                output_string = output_string + "\nCalculation took " + str(elapsed_time) + " seconds."
+            if show_drop_count:
+                output_string = output_string + "\nThere are currently " + str(len(drop_array)) + " active drops in the height map."
+            if show_average_drop_mass:
+                masses = 0.0
+                for drop in drop_array:
+                    masses += drop.mass
+                avg_mass = masses/len(drop_array)
+                output_string = output_string + "\nThe average mass of the drops is " + str(avg_mass) + " kg."
+            print(output_string)
 
         if args.format != "none":
             if args.name:
