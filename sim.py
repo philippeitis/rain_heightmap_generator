@@ -104,14 +104,14 @@ class Droplet:
         return highest_x + math.floor(self.radius())
 
     def get_height(self, x, y):
-        if len(self.hemispheres) >= 1:
+        if len(self.hemispheres) == 1:
             return np.sqrt(self.radius() ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
         else:
-            summation = 0
+            summation = 0.0
             for x, y in self.hemispheres:
-                local_height = np.sqrt(self.radius() ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
-                if local_height > 0:
-                    summation += local_height
+                local_height_sqr = self.radius() ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2
+                if local_height_sqr > 0:
+                    summation += np.sqrt(local_height_sqr)
             return summation
 
 
@@ -266,9 +266,9 @@ def save(filename, fformat):
     border = int(args.border)
 
     height_map[0:border] = 0
-    height_map[height - border:] = 0
+    height_map[width - border:] = 0
     height_map[:, 0:border] = 0
-    height_map[:, width - border:] = 0
+    height_map[:, height - border:] = 0
 
     if fformat == "txt":
         np.savetxt(filename + ".txt", height_map, delimiter=",")
