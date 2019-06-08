@@ -14,8 +14,12 @@ class Droplet:
         self.direction = 0
         self.t_i = 0
         self.hemispheres = [(self.x, self.y)]  # (x,y) tuples (could add z to represent share of mass)
+        self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / density_water) / scale_factor * width
         if mass < m_static and hemispheres_enabled:
             self.generate_hemispheres()
+
+    def recalculate_radius(self):
+        self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / density_water) / scale_factor * width
 
     def generate_hemispheres(self):
         # TODO: fix this code ot be faster
@@ -73,12 +77,9 @@ class Droplet:
             for drop_x, drop_y in drop.hemispheres:
                 delta_x = self_x - drop_x
                 delta_y = self_y - drop_y
-                if math.sqrt(delta_x**2 + delta_y**2) < drop.radius() + self.radius():
+                if math.sqrt(delta_x**2 + delta_y**2) < drop.radius + self.radius:
                     return True
         return False
-
-    def radius(self):
-        return np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / density_water) / scale_factor * width
 
     def residual_probability(self):
         if self.velocity > 0:
@@ -87,26 +88,26 @@ class Droplet:
             return 0
 
     def get_lowest_y(self):
-        return min(self.hemispheres, key=lambda t: t[1])[1] - math.floor(self.radius()) - 1
+        return min(self.hemispheres, key=lambda t: t[1])[1] - math.floor(self.radius) - 1
 
     def get_highest_y(self):
-        return max(self.hemispheres, key=lambda t: t[1])[1] + math.floor(self.radius()) + 1
+        return max(self.hemispheres, key=lambda t: t[1])[1] + math.floor(self.radius) + 1
 
     def get_lowest_x(self):
-        return min(self.hemispheres, key=lambda t: t[0])[0] - math.floor(self.radius()) - 1
+        return min(self.hemispheres, key=lambda t: t[0])[0] - math.floor(self.radius) - 1
 
     def get_highest_x(self):
-        return max(self.hemispheres, key=lambda t: t[0])[0] + math.floor(self.radius()) + 1
+        return max(self.hemispheres, key=lambda t: t[0])[0] + math.floor(self.radius) + 1
 
     def get_height(self, x, y):
         if len(self.hemispheres) >= 1:
-            return np.sqrt(self.radius() ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
+            return np.sqrt(self.radius ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
         else:
             summation = 0.0
             for x, y in self.hemispheres:
                 distance_from_center = np.sqrt((y - self.y) ** 2 + (x - self.x) ** 2)
-                if self.radius() >= distance_from_center > 0:
-                    summation += np.sqrt(self.radius() ** 2 - distance_from_center ** 2)
+                if self.radius >= distance_from_center > 0:
+                    summation += np.sqrt(self.radius ** 2 - distance_from_center ** 2)
             return summation
 
 
@@ -114,7 +115,7 @@ def choose_direction(droplet):
     # Chooses three regions in front of the drop, calculates total water volume
     # and returns region with highest water volume, or random if equal quantities of
     # water present
-    radius = math.floor(droplet.radius())
+    radius = math.floor(droplet.radius)
     start_y = droplet.y + radius
     end_y = start_y + radius * 2
     x_1 = droplet.x + radius * 3
@@ -178,6 +179,7 @@ def leave_residual_droplets():
                 a = np.random.uniform(0.1, 0.3)
                 new_drop_mass = min(m_static, a*drop.mass)
                 drop.mass -= new_drop_mass
+                drop.recalculate_radius()
                 drops_to_add.append(Droplet(drop.x, drop.y, new_drop_mass, 0))
 
     drop_array.extend(drops_to_add)
@@ -229,6 +231,7 @@ def merge_drops():
             if a.y < b.y:
                 a.velocity = new_velocity
                 a.mass += b.mass
+                a.recalculate_radius
                 if a.mass < m_static and hemispheres_enabled:
                     a.generate_hemispheres()
                 drop_array.remove(b)
@@ -236,6 +239,7 @@ def merge_drops():
             else:
                 b.velocity = new_velocity
                 b.mass += a.mass
+                a.recalculate_radius
                 if b.mass < m_static and hemispheres_enabled:
                     b.generate_hemispheres()
                 drop_array.remove(a)
@@ -244,7 +248,7 @@ def merge_drops():
 def trim_drops():
     drops_to_remove = []
     for drop in drop_array:
-        radius = drop.radius()
+        radius = drop.radius
         x = drop.x
         y = drop.y
         if x + radius < 0 or x - radius > width or y + radius < 0 or y - radius > height:
