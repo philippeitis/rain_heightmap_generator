@@ -20,21 +20,26 @@ class Droplet:
     def generate_hemispheres(self):
         self.hemispheres = [(self.x,self.y)]
         num_hemispheres = random.randint(1, max_hemispheres)
-        new_x = self.x
-        new_y = self.y
+
         while len(self.hemispheres) < num_hemispheres:
+            old_x, old_y = self.hemispheres[-1]
+            new_x, new_y = 0,0
             direction = random.randint(1, 4)
             if direction == 1:  # Down
-                new_y -= 1
+                new_y = old_y - 1
+                new_x = old_x
             if direction == 2:  # Left
-                new_x -= 1
+                new_y = old_y
+                new_x = old_x - 1
             if direction == 3:  # Up
-                new_y += 1
+                new_y = old_y + 1
+                new_x = old_x
             if direction == 4:  # Right
-                new_x += 1
+                new_y = old_y
+                new_x = old_x + 1
 
             if not (new_x, new_y) in self.hemispheres:
-                self.hemispheres.append((new_x,new_y))
+                self.hemispheres.append((new_x, new_y))
 
     def iterate_position(self):
         if self.mass > m_static:
@@ -76,42 +81,26 @@ class Droplet:
             return 0
 
     def get_lowest_y(self):
-        lowest_y = height
-        for x, y in self.hemispheres:
-            if y < lowest_y:
-                lowest_y = y
-        return lowest_y - math.floor(self.radius())
+        return min(self.hemispheres, key=lambda t: t[1])[1] - math.floor(self.radius())
 
     def get_highest_y(self):
-        highest_y = 0
-        for x, y in self.hemispheres:
-            if y > highest_y:
-                highest_y = y
-        return highest_y + math.floor(self.radius())
+        return max(self.hemispheres, key=lambda t: t[1])[1] + math.floor(self.radius())
 
     def get_lowest_x(self):
-        lowest_x = width
-        for x, y in self.hemispheres:
-            if x < lowest_x:
-                lowest_x = x
-        return lowest_x - math.floor(self.radius())
+        return min(self.hemispheres, key=lambda t: t[0])[0] - math.floor(self.radius())
 
     def get_highest_x(self):
-        highest_x = 0
-        for x, y in self.hemispheres:
-            if x > highest_x:
-                highest_x = x
-        return highest_x + math.floor(self.radius())
+        return max(self.hemispheres, key=lambda t: t[0])[0] + math.floor(self.radius())
 
     def get_height(self, x, y):
-        if len(self.hemispheres) == 1:
+        if len(self.hemispheres) >= 1:
             return np.sqrt(self.radius() ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
         else:
             summation = 0.0
             for x, y in self.hemispheres:
-                local_height_sqr = self.radius() ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2
-                if local_height_sqr > 0:
-                    summation += np.sqrt(local_height_sqr)
+                distance_from_center = np.sqrt((y - self.y) ** 2 + (x - self.x) ** 2)
+                if self.radius() >= distance_from_center > 0:
+                    summation += np.sqrt(self.radius() ** 2 - distance_from_center ** 2)
             return summation
 
 
@@ -385,7 +374,7 @@ if __name__ == '__main__':
     average_mass = args.m_avg
     deviation_mass = args.m_dev  # normally distributed
     hemispheres_enabled = bool(args.enable_hemispheres)
-    max_hemispheres = args.max_hemispheres
+    max_hemispheres = int(args.max_hemispheres)
     m_static = average_mass + deviation_mass * st.norm.ppf(args.m_static)
     friction_constant_force = m_static * gravity
 
