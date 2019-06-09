@@ -88,30 +88,29 @@ class Droplet:
             return 0
 
     def get_lowest_y(self):
-        #return self.y - math.floor(self.radius) - 1
         return min(self.hemispheres, key=lambda t: t[1])[1] - math.floor(self.radius) - 1
 
     def get_highest_y(self):
-        #return self.y + math.floor(self.radius) + 2
         return max(self.hemispheres, key=lambda t: t[1])[1] + math.floor(self.radius) + 1
 
     def get_lowest_x(self):
-        #return self.x - math.floor(self.radius) - 1
         return min(self.hemispheres, key=lambda t: t[0])[0] - math.floor(self.radius) - 1
 
     def get_highest_x(self):
-        #return self.x + math.floor(self.radius) + 2
         return max(self.hemispheres, key=lambda t: t[0])[0] + math.floor(self.radius) + 1
 
-    def get_height(self, x, y): # very time consuming
+    def get_height(self, x, y):
         if len(self.hemispheres) >= 1:
             return np.sqrt(self.radius ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
-        else:
+
+        else:                                                                           # This does not work correctly
             summation = 0.0
-            for x, y in self.hemispheres:  # for each hemisphere, check if point is in bounds
-                distance_from_center = np.sqrt((y - self.y) ** 2 + (x - self.x) ** 2)  # distance (pythagoras)
-                if self.radius >= distance_from_center:  # in bounds
-                    summation += np.sqrt(self.radius ** 2 - distance_from_center ** 2)  # add height to total
+
+            for x, y in self.hemispheres:                                               # for each hemisphere, check if point is in bounds
+                distance_from_center = np.sqrt((y - self.y) ** 2 + (x - self.x) ** 2)   # distance (pythagoras)
+                if self.radius >= distance_from_center:                                 # in bounds?
+                    summation += np.sqrt(self.radius ** 2 - distance_from_center ** 2)  # if yes, add height to total
+
             return summation
 
 
