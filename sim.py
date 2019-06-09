@@ -22,9 +22,11 @@ class Droplet:
         self.calculate_radius()
 
     def calculate_radius(self):
+        # Only called when mass changes to avoid excessive calculations
         self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / density_water) / scale_factor * width
 
     def generate_hemispheres(self):
+        # Random walk to decide locations of hemispheres.
         self.hemispheres = [(self.x, self.y)]
         num_hemispheres = random.randint(1, max_hemispheres)
         directions = (1,2,3,4)
@@ -45,7 +47,7 @@ class Droplet:
                 next_dirs = (1, 3, 4)
                 new_x += 1
 
-            if (new_x, new_y) in self.hemispheres:
+            if (new_x, new_y) in self.hemispheres: # To avoid infinite loops
                 break
             else:
                 self.hemispheres.append((new_x, new_y))
@@ -88,28 +90,31 @@ class Droplet:
             return 0
 
     def get_lowest_y(self):
-        return min(self.hemispheres, key=lambda t: t[1])[1] - math.floor(self.radius) - 1
+        return min(self.hemispheres, key=lambda t: t[1])[1] - math.ceil(self.radius)
 
     def get_highest_y(self):
-        return max(self.hemispheres, key=lambda t: t[1])[1] + math.floor(self.radius) + 1
+        return max(self.hemispheres, key=lambda t: t[1])[1] + math.ceil(self.radius)
 
     def get_lowest_x(self):
-        return min(self.hemispheres, key=lambda t: t[0])[0] - math.floor(self.radius) - 1
+        return min(self.hemispheres, key=lambda t: t[0])[0] - math.ceil(self.radius)
 
     def get_highest_x(self):
-        return max(self.hemispheres, key=lambda t: t[0])[0] + math.floor(self.radius) + 1
+        return max(self.hemispheres, key=lambda t: t[0])[0] + math.ceil(self.radius)
 
     def get_height(self, x, y):
-        if len(self.hemispheres) >= 1:
+        if len(self.hemispheres) == 1:
             return np.sqrt(self.radius ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
 
         else:                                                                           # This does not work correctly
             summation = 0.0
 
-            for x, y in self.hemispheres:                                               # for each hemisphere, check if point is in bounds
-                distance_from_center = np.sqrt((y - self.y) ** 2 + (x - self.x) ** 2)   # distance (pythagoras)
-                if self.radius >= distance_from_center:                                 # in bounds?
-                    summation += np.sqrt(self.radius ** 2 - distance_from_center ** 2)  # if yes, add height to total
+            for hemi_x, hemi_y in self.hemispheres:                                               # for each hemisphere, check if point is in bounds
+                delta_x = x - hemi_x
+                delta_y = y - hemi_y
+                rad_sqr = self.radius ** 2
+                distance_from_center_sqr = delta_x ** 2 + delta_y ** 2  # distance (pythagoras)
+                if rad_sqr >= distance_from_center_sqr:                                 # in bounds?
+                    summation += np.sqrt(rad_sqr - distance_from_center_sqr)  # if yes, add height to total
 
             return summation
 
@@ -121,10 +126,10 @@ def choose_direction(droplet):
     radius = math.floor(droplet.radius)
     start_y = droplet.y + radius
     end_y = start_y + radius * 2
-    x_1 = droplet.x + radius * 3
-    x_2 = droplet.x + radius
-    x_3 = droplet.x - radius
-    x_4 = droplet.x - 3 * radius
+    x_1 = droplet.x - radius * 3
+    x_2 = droplet.x - radius
+    x_3 = droplet.x + radius
+    x_4 = droplet.x + 3 * radius
 
     sum1 = 0
 
@@ -161,7 +166,7 @@ def choose_direction(droplet):
 # masses bounded by m_min and m_max
 def add_drops(avg):
     for x in range(avg):
-        mass = min(m_max,max(m_min,np.random.normal(average_mass, deviation_mass, 1)))
+        mass = min(m_max,max(m_min, np.random.normal(average_mass, deviation_mass, 1)))
         drop_to_add = Droplet(random.randint(0, width), random.randint(0, height), mass)
         if mass > m_static:
             active_drops.append(drop_to_add)
@@ -172,6 +177,8 @@ def add_drops(avg):
 # Iterates over all active drops (which are moving faster than a given speed) to update their position
 def iterate_over_drops():
     for drop in active_drops:
+        old_x = drop.x
+        old_y = drop.y
         ## TODO: handling for fast particles (and streaks of water)
         drop.iterate_position()
 
@@ -182,7 +189,7 @@ def leave_residual_droplets():
         if drop.mass > m_static:
             if drop.residual_probability() < np.random.uniform():
                 drop.t_i = 0
-                a = np.random.uniform(0.1, 0.3)
+                a = np.random.uniform(0.05, 0.15)
                 new_drop_mass = min(m_static, a*drop.mass)
                 drop.mass -= new_drop_mass
                 drop.calculate_radius()
@@ -363,7 +370,7 @@ if __name__ == '__main__':
                         help='Sets the number of drops added to the height map '
                              'each time step.')
 
-    parser.add_argument('--residual_drops', dest='leave_residuals', default=False,
+    parser.add_argument('--residual_drops', dest='leave_residuals', default=True,
                         help='Enables leaving residual drops')
     parser.add_argument('--beta', dest='beta', default=0.5,
                         help='Sets value b in equation used to determine if drop should be left or not')
@@ -422,22 +429,22 @@ if __name__ == '__main__':
 
     width = int(args.w)
     height = int(args.h)
-    scale_factor = args.scale
+    scale_factor = float(args.scale)
 
-    density_water = args.water
-    gravity = args.g
+    density_water = int(args.water)
+    gravity = float(args.g)
     beta = 0.5
 
-    m_min = args.m_min
-    m_max = args.m_max
-    average_mass = args.m_avg
+    m_min = float(args.m_min)
+    m_max = float(args.m_max)
+    average_mass = float(args.m_avg)
     deviation_mass = args.m_dev  # normally distributed
     hemispheres_enabled = bool(args.enable_hemispheres)
     max_hemispheres = int(args.max_hemispheres)
-    m_static = average_mass + deviation_mass * st.norm.ppf(args.m_static)
+    m_static = average_mass + deviation_mass * st.norm.ppf(float(args.m_static))
     friction_constant_force = m_static * gravity
 
-    time_step = args.time
+    time_step = float(args.time)
     t_max = time_step * 4
 
     temp_name = "temp"
