@@ -2,6 +2,7 @@ import math
 import scipy.stats as st
 import numpy as np
 import random
+import itertools
 from scipy import ndimage
 
 
@@ -158,18 +159,20 @@ def add_drops(avg):
     for x in range(avg):
         mass = min(m_max,max(m_min,np.random.normal(average_mass, deviation_mass, 1)))
         drop_to_add = Droplet(random.randint(0, width), random.randint(0, height), mass)
-        drop_array.append(drop_to_add)
+        if mass > m_static:
+            active_drops.append(drop_to_add)
+        else:
+            new_drops.append(drop_to_add)
 
 
 def iterate_over_drops():
-    for drop in drop_array:
+    for drop in active_drops:
         ## TODO: handling for fast particles (and streaks of water)
         drop.iterate_position()
 
 
 def leave_residual_droplets():
-    drops_to_add = []
-    for drop in drop_array:
+    for drop in active_drops:
         if drop.mass > m_static:
             if drop.residual_probability() < np.random.uniform():
                 drop.t_i = 0
@@ -177,9 +180,12 @@ def leave_residual_droplets():
                 new_drop_mass = min(m_static, a*drop.mass)
                 drop.mass -= new_drop_mass
                 drop.calculate_radius()
-                drops_to_add.append(Droplet(drop.x, drop.y, new_drop_mass, 0))
 
-    drop_array.extend(drops_to_add)
+                if drop.mass < m_static:
+                    active_drops.remove(drop)
+                    new_drops.append(drop)
+                new_drops.append(Droplet(drop.x, drop.y, new_drop_mass, 0))
+
 
 
 def compute_height_map():
@@ -188,7 +194,7 @@ def compute_height_map():
 
 
 def update_height_map():
-    for drop in drop_array:
+    for drop in itertools.chain(active_drops,new_drops):
         for y in range(drop.get_lowest_y(), drop.get_highest_y() + 1):
             for x in range(drop.get_lowest_x(), drop.get_highest_x() + 1):
                 if (0 <= y < height) and (0 <= x < width):
@@ -209,11 +215,20 @@ def floor_water():
 def detect_intersections():
     # TODO: implement ID map
     detections = []
+    temp_array = []
+    temp_array.extend(active_drops)
+    temp_array.extend(new_drops)
 
-    for a in range(len(drop_array)):
-        for b in range(a+1, len(drop_array)):
-            if drop_array[a].intersects(drop_array[b]):
+    # All intersections of active and new drops with each other
+    for a in range(len(temp_array)):
+        for b in range(a+1, len(temp_array)):
+            if temp_array[a].intersects(temp_array[b]):
                 detections.append((drop_array[a], drop_array[b]))
+
+    for drop_a in temp_array:
+        for drop_b in drop_array:
+            if drop_a.intersects(drop_b):
+                detections.append((drop_a,drop_b))
 
     return detections
 
@@ -230,22 +245,33 @@ def merge_drops():
                 a.velocity = new_velocity
                 a.mass += b.mass
                 a.calculate_radius
-                if a.mass < m_static and hemispheres_enabled:
+                if a.mass <= m_static and hemispheres_enabled:
                     a.generate_hemispheres()
+                    if a not in new_drops:
+                        new_drops.append(a)
+                        drop_array.remove(a)
+                elif a.mass > m_static and a not in active_drops:
+                    active_drops.append(a)
                 drop_array.remove(b)
 
             else:
                 b.velocity = new_velocity
                 b.mass += a.mass
-                a.calculate_radius
-                if b.mass < m_static and hemispheres_enabled:
+                b.calculate_radius
+                if b.mass <= m_static and hemispheres_enabled:
                     b.generate_hemispheres()
+                    if b not in new_drops:
+                        new_drops.append(b)
+                        drop_array.remove(b)
+                elif b.mass > m_static and b not in active_drops:
+                    active_drops.append(b)
+
                 drop_array.remove(a)
 
 
 def trim_drops():
     drops_to_remove = []
-    for drop in drop_array:
+    for drop in active_drops:
         radius = drop.radius
         x = drop.x
         y = drop.y
@@ -253,13 +279,13 @@ def trim_drops():
             drops_to_remove.append(drop)
 
     for drop in drops_to_remove:
-        drop_array.remove(drop)
+        active_drops.remove(drop)
 
 
-def generate_time_stamp():
-    from datetime import datetime
-    now = datetime.now()  # current date and time
-    return now.strftime("%m-%d0%Y-%H-%M-%S")
+def empty_new_drop_arr():
+    global new_drops
+    drop_array.extend(new_drops)
+    new_drops = []
 
 
 def save(filename, fformat):
@@ -305,6 +331,12 @@ def padded_zeros(ref_string, curr_num):
     while len(out_string) < len(ref_string):
         out_string = "0" + out_string
     return out_string
+
+
+def generate_time_stamp():
+    from datetime import datetime
+    now = datetime.now()  # current date and time
+    return now.strftime("%m-%d0%Y-%H-%M-%S")
 
 
 if __name__ == '__main__':
@@ -438,6 +470,8 @@ if __name__ == '__main__':
     for i in range(int(args.runs)):
         file_name = ""
         drop_array = []
+        active_drops = []
+
         height_map = np.zeros(shape=(width, height))
 
         if int(args.runs) > 1:
@@ -449,6 +483,8 @@ if __name__ == '__main__':
             file_name = name
 
         for ii in range(int(args.steps)):
+            new_drops = []
+
             if show_time:
                 start_time = time.time()
 
@@ -457,10 +493,12 @@ if __name__ == '__main__':
 
             if bool(args.leave_residuals):
                 leave_residual_droplets()   # Very fast
-            update_height_map()             # Takes around 1/3 of the processing time
-            compute_height_map()            # Very fast
             merge_drops()                   # Takes around 1/3 of the processing time
             trim_drops()                    # Very fast
+            update_height_map()             # Takes around 1/3 of the processing time
+            compute_height_map()            # Very fast
+            empty_new_drop_arr()
+
             output_string = "\rStep " + str(ii+1) + " out of " + args.steps + " is complete."
 
             if show_time:
