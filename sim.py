@@ -187,7 +187,6 @@ def leave_residual_droplets():
                 new_drops.append(Droplet(drop.x, drop.y, new_drop_mass, 0))
 
 
-
 def compute_height_map():
     smooth_height_map()
     floor_water()
@@ -505,7 +504,8 @@ if __name__ == '__main__':
                 elapsed_time = time.time()-start_time
                 output_string = output_string + "\nCalculation took " + str(elapsed_time) + " seconds."
             if show_drop_count:
-                output_string = output_string + "\nThere are currently " + str(len(drop_array)) + " active drops in the height map."
+                output_string = output_string + "\nThere are currently " + str(len(drop_array)+len(active_drops)) + \
+                                " drops in the height map, of which " + str(len(active_drops)) + " are in motion."
             if show_average_drop_mass:
                 masses = 0.0
                 for drop in drop_array:
