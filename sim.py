@@ -14,9 +14,9 @@ class Droplet:
         self.direction = 0
         self.t_i = 0
         self.hemispheres = [(self.x, self.y)]  # (x,y) tuples (could add z to represent share of mass)
-        self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / density_water) / scale_factor * width
         if mass < m_static and hemispheres_enabled:
             self.generate_hemispheres()
+        self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / density_water) / scale_factor * width
 
     def recalculate_radius(self):
         self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / density_water) / scale_factor * width
@@ -28,27 +28,24 @@ class Droplet:
         directions = (1,2,3,4)
         next_dirs = directions
         while len(self.hemispheres) < num_hemispheres:
-            old_x, old_y = self.hemispheres[-1]
-            new_x, new_y = 0,0
+            new_x, new_y = self.hemispheres[-1]
             direction = random.choice(next_dirs)
             if direction == 1:  # Down
                 next_dirs = (1, 2, 4)
-                new_y = old_y - 1
-                new_x = old_x
+                new_y -= 1
             if direction == 2:  # Left
                 next_dirs = (1, 2, 3)
-                new_y = old_y
-                new_x = old_x - 1
+                new_x -= 1
             if direction == 3:  # Up
                 next_dirs = (2, 3, 4)
-                new_y = old_y + 1
-                new_x = old_x
+                new_y += 1
             if direction == 4:  # Right
                 next_dirs = (1, 3, 4)
-                new_y = old_y
-                new_x = old_x + 1
+                new_x += 1
 
-            if not (new_x, new_y) in self.hemispheres:
+            if (new_x, new_y) in self.hemispheres:
+                break
+            else:
                 self.hemispheres.append((new_x, new_y))
 
     def iterate_position(self):
@@ -99,7 +96,7 @@ class Droplet:
     def get_highest_x(self):
         return max(self.hemispheres, key=lambda t: t[0])[0] + math.floor(self.radius) + 1
 
-    def get_height(self, x, y):
+    def get_height(self, x, y): # very time consuming
         if len(self.hemispheres) >= 1:
             return np.sqrt(self.radius ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
         else:
@@ -170,7 +167,6 @@ def iterate_over_drops():
 
 
 def leave_residual_droplets():
-    # TODO: fix this code to be faster
     drops_to_add = []
     for drop in drop_array:
         if drop.mass > m_static:
@@ -210,6 +206,7 @@ def floor_water():
 
 
 def detect_intersections():
+    # TODO: implement ID map
     detections = []
 
     for a in range(len(drop_array)):
@@ -311,6 +308,7 @@ def padded_zeros(ref_string, curr_num):
 
 if __name__ == '__main__':
     import argparse
+    import cProfile
 
     parser = argparse.ArgumentParser(description='Create the height map for rain on a surface.')
     parser.add_argument('steps') # around 50 time steps is good
@@ -383,6 +381,7 @@ if __name__ == '__main__':
                         't : time to execute each step, '
                         'd : number of droplets in each step, '
                         'a : average mass of droplets in each step.')
+
     args = parser.parse_args()
 
     width = int(args.w)
@@ -452,14 +451,15 @@ if __name__ == '__main__':
             if show_time:
                 start_time = time.time()
 
-            add_drops(int(args.drops))
-            iterate_over_drops()
+            add_drops(int(args.drops))      # Very fast
+            iterate_over_drops()            # Very fast
+
             if bool(args.leave_residuals):
-                leave_residual_droplets()
-            update_height_map()
-            compute_height_map()
-            merge_drops()
-            trim_drops()
+                leave_residual_droplets()   # Very fast
+            update_height_map()             # Takes around 1/3 of the processing time
+            compute_height_map()            # Very fast
+            merge_drops()                   # Takes around 1/3 of the processing time
+            trim_drops()                    # Very fast
             output_string = "\rStep " + str(ii+1) + " out of " + args.steps + " is complete."
 
             if show_time:
