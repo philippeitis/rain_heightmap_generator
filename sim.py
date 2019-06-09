@@ -67,6 +67,7 @@ class Droplet:
 
                 # This determines if we should leave a droplet behind
                 self.t_i += 1
+            self.hemispheres = [(self.x, self.y)]
 
     def intersects(self, drop):
         if drop.get_lowest_y() < self.get_highest_y() or drop.get_highest_y() > self.get_lowest_y():
@@ -87,15 +88,19 @@ class Droplet:
             return 0
 
     def get_lowest_y(self):
+        #return self.y - math.floor(self.radius) - 1
         return min(self.hemispheres, key=lambda t: t[1])[1] - math.floor(self.radius) - 1
 
     def get_highest_y(self):
+        #return self.y + math.floor(self.radius) + 2
         return max(self.hemispheres, key=lambda t: t[1])[1] + math.floor(self.radius) + 1
 
     def get_lowest_x(self):
+        #return self.x - math.floor(self.radius) - 1
         return min(self.hemispheres, key=lambda t: t[0])[0] - math.floor(self.radius) - 1
 
     def get_highest_x(self):
+        #return self.x + math.floor(self.radius) + 2
         return max(self.hemispheres, key=lambda t: t[0])[0] + math.floor(self.radius) + 1
 
     def get_height(self, x, y): # very time consuming
@@ -241,31 +246,29 @@ def merge_drops():
             new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
 
             if a.y < b.y:
-                a.velocity = new_velocity
-                a.mass += b.mass
-                a.calculate_radius
-                if a.mass <= m_static and hemispheres_enabled:
-                    a.generate_hemispheres()
-                    if a not in new_drops:
-                        new_drops.append(a)
-                        drop_array.remove(a)
-                elif a.mass > m_static and a not in active_drops:
-                    active_drops.append(a)
-                drop_array.remove(b)
-
+                low_drop = a
+                high_drop = b
             else:
-                b.velocity = new_velocity
-                b.mass += a.mass
-                b.calculate_radius
-                if b.mass <= m_static and hemispheres_enabled:
-                    b.generate_hemispheres()
-                    if b not in new_drops:
-                        new_drops.append(b)
-                        drop_array.remove(b)
-                elif b.mass > m_static and b not in active_drops:
-                    active_drops.append(b)
+                low_drop = b
+                high_drop = b
 
-                drop_array.remove(a)
+            low_drop.velocity = new_velocity
+            low_drop.mass += b.mass
+            low_drop.calculate_radius()
+            if low_drop.mass <= m_static and hemispheres_enabled:
+                low_drop.generate_hemispheres()
+                if low_drop not in new_drops:
+                    new_drops.append(low_drop)
+                    drop_array.remove(low_drop)
+            elif a.mass > m_static and a not in active_drops:
+                active_drops.append(low_drop)
+
+            if high_drop in drop_array:
+                drop_array.remove(high_drop)
+            elif high_drop in active_drops:
+                active_drops.remove(high_drop)
+            elif high_drop in new_drops:
+                new_drops.remove(high_drop)
 
 
 def trim_drops():
