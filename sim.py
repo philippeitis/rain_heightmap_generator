@@ -169,12 +169,14 @@ def add_drops(avg):
             new_drops.append(drop_to_add)
 
 
+# Iterates over all active drops (which are moving faster than a given speed) to update their position
 def iterate_over_drops():
     for drop in active_drops:
         ## TODO: handling for fast particles (and streaks of water)
         drop.iterate_position()
 
 
+# Goes over all active drops, and has them leave
 def leave_residual_droplets():
     for drop in active_drops:
         if drop.mass > m_static:
@@ -515,6 +517,10 @@ if __name__ == '__main__':
                 avg_mass = masses/len(drop_array)
                 output_string = output_string + "\nThe average mass of the drops is " + str(avg_mass) + " kg."
             print(output_string)
+
+        new_drops = drop_array
+        update_height_map()
+        compute_height_map()
 
         if args.format != "none":
             if args.name:
