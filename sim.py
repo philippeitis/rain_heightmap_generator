@@ -16,14 +16,15 @@ class Droplet:
         self.hemispheres = [(self.x, self.y)]  # (x,y) tuples (could add z to represent share of mass)
         if mass < m_static and hemispheres_enabled:
             self.generate_hemispheres()
-        self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / density_water) / scale_factor * width
 
-    def recalculate_radius(self):
+        self.radius = 0
+        self.calculate_radius()
+
+    def calculate_radius(self):
         self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / density_water) / scale_factor * width
 
     def generate_hemispheres(self):
-        # TODO: fix this code ot be faster
-        self.hemispheres = [(self.x,self.y)]
+        self.hemispheres = [(self.x, self.y)]
         num_hemispheres = random.randint(1, max_hemispheres)
         directions = (1,2,3,4)
         next_dirs = directions
@@ -101,10 +102,10 @@ class Droplet:
             return np.sqrt(self.radius ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
         else:
             summation = 0.0
-            for x, y in self.hemispheres:
-                distance_from_center = np.sqrt((y - self.y) ** 2 + (x - self.x) ** 2)
-                if self.radius >= distance_from_center > 0:
-                    summation += np.sqrt(self.radius ** 2 - distance_from_center ** 2)
+            for x, y in self.hemispheres:  # for each hemisphere, check if point is in bounds
+                distance_from_center = np.sqrt((y - self.y) ** 2 + (x - self.x) ** 2)  # distance (pythagoras)
+                if self.radius >= distance_from_center:  # in bounds
+                    summation += np.sqrt(self.radius ** 2 - distance_from_center ** 2)  # add height to total
             return summation
 
 
@@ -175,7 +176,7 @@ def leave_residual_droplets():
                 a = np.random.uniform(0.1, 0.3)
                 new_drop_mass = min(m_static, a*drop.mass)
                 drop.mass -= new_drop_mass
-                drop.recalculate_radius()
+                drop.calculate_radius()
                 drops_to_add.append(Droplet(drop.x, drop.y, new_drop_mass, 0))
 
     drop_array.extend(drops_to_add)
@@ -228,7 +229,7 @@ def merge_drops():
             if a.y < b.y:
                 a.velocity = new_velocity
                 a.mass += b.mass
-                a.recalculate_radius
+                a.calculate_radius
                 if a.mass < m_static and hemispheres_enabled:
                     a.generate_hemispheres()
                 drop_array.remove(b)
@@ -236,7 +237,7 @@ def merge_drops():
             else:
                 b.velocity = new_velocity
                 b.mass += a.mass
-                a.recalculate_radius
+                a.calculate_radius
                 if b.mass < m_static and hemispheres_enabled:
                     b.generate_hemispheres()
                 drop_array.remove(a)
