@@ -7,10 +7,15 @@ from scipy import ndimage
 
 
 class Droplet:
-    def __init__(self, x, y, mass, velocity=0):
+    def __init__(self, x, y, mass, velocity, height_map, active_drops, drop_array, new_drops):
+        self.height_map = height_map
+        self.active_drops = active_drops
+        self.drop_array = drop_array
+        self.new_drops = new_drops
+
         self.x = x
         self.y = y
-        self.mass = mass
+        self.mass = 0
         self.velocity = velocity
         self.direction = 0
         self.t_i = 0
@@ -19,6 +24,22 @@ class Droplet:
             self.generate_hemispheres()
 
         self.radius = 0
+        self.set_mass(mass)
+
+    def set_mass(self, new_mass):
+        old_mass = self.mass
+        if old_mass > m_static >= new_mass:
+            self.active_drops.remove(self)
+            self.new_drops.append(self)
+            self.generate_hemispheres()
+        elif old_mass <= m_static < new_mass:
+            self.active_drops.append(self)
+            if self in self.new_drops:
+                self.new_drops.remove(self)
+            elif self in self.drop_array:
+                self.drop_array.remove(self)
+
+        self.mass = new_mass
         self.calculate_radius()
 
     def calculate_radius(self):
@@ -29,7 +50,7 @@ class Droplet:
         # Random walk to decide locations of hemispheres.
         self.hemispheres = [(self.x, self.y)]
         num_hemispheres = random.randint(1, max_hemispheres)
-        directions = (1,2,3,4)
+        directions = (1, 2, 3, 4)
         next_dirs = directions
         while len(self.hemispheres) < num_hemispheres:
             new_x, new_y = self.hemispheres[-1]
@@ -85,7 +106,7 @@ class Droplet:
 
     def residual_probability(self):
         if self.velocity > 0:
-            return min(1,beta * time_step / t_max * min(1, self.t_i / t_max))
+            return min(1, beta * time_step / t_max * min(1, self.t_i / t_max))
         else:
             return 0
 
@@ -118,11 +139,20 @@ class Droplet:
 
             return summation
 
+    def delete(self):
+        if self in self.drop_array:
+            self.drop_array.remove(self)
+        elif self in self.active_drops:
+            self.active_drops.remove(self)
+        elif self in self.new_drops:
+            self.new_drops.remove(self)
+
 
 def choose_direction(droplet):
     # Chooses three regions in front of the drop, calculates total water volume
     # and returns region with highest water volume, or random if equal quantities of
     # water present
+    height_map = droplet.height_map
     radius = math.floor(droplet.radius)
     start_y = droplet.y + radius
     end_y = start_y + radius * 2
@@ -164,18 +194,16 @@ def choose_direction(droplet):
 
 # Adds avg drops, placed randomly on the height map, with randomly generated
 # masses bounded by m_min and m_max
-def add_drops(avg):
+def add_drops(avg, height_map, active_drops, drop_array, new_drops):
     for x in range(avg):
         mass = min(m_max,max(m_min, np.random.normal(average_mass, deviation_mass, 1)))
-        drop_to_add = Droplet(random.randint(0, width), random.randint(0, height), mass)
-        if mass > m_static:
-            active_drops.append(drop_to_add)
-        else:
-            new_drops.append(drop_to_add)
+        drop_to_add = Droplet(random.randint(0, width), random.randint(0, height), mass, 0,
+                              height_map, active_drops, drop_array, new_drops)
+    return active_drops, drop_array, new_drops
 
 
 # Iterates over all active drops (which are moving faster than a given speed) to update their position
-def iterate_over_drops():
+def iterate_over_drops(active_drops):
     for drop in active_drops:
         old_x = drop.x
         old_y = drop.y
@@ -188,6 +216,7 @@ def iterate_over_drops():
 
 
 def leave_streaks(old_x, old_y, drop):
+    height_map = drop.height_map
     if old_x == drop.x:
         for y in range(old_y,drop.y):
             center_x = drop.x + random.randint(-2, 2)
@@ -196,29 +225,27 @@ def leave_streaks(old_x, old_y, drop):
                     height_map[x, y] = max(np.sqrt(drop.radius ** 2 - (x - center_x) ** 2),height_map[x,y])
     # Todo: add support for diagonal streaks
 
+
 # Goes over all active drops, and has them leave
-def leave_residual_droplets():
+def leave_residual_droplets(height_map, active_drops, drop_array, new_drops):
     for drop in active_drops:
         if drop.mass > m_static:
             if drop.residual_probability() < np.random.uniform():
                 drop.t_i = 0
                 a = np.random.uniform(0.05, 0.15)
                 new_drop_mass = min(m_static, a*drop.mass)
-                drop.mass -= new_drop_mass
-                drop.calculate_radius()
+                drop.set_mass(drop.mass - new_drop_mass)
+                Droplet(drop.x, drop.y, new_drop_mass, 0,
+                        height_map, active_drops, drop_array, new_drops)
+    return active_drops, drop_array, new_drops
 
-                if drop.mass < m_static:
-                    active_drops.remove(drop)
-                    new_drops.append(drop)
-                new_drops.append(Droplet(drop.x, drop.y, new_drop_mass, 0))
-
-
-def compute_height_map():
-    smooth_height_map()
-    floor_water()
+def compute_height_map(height_map):
+    height_map = smooth_height_map(height_map)
+    height_map = floor_water(height_map)
+    return height_map
 
 
-def update_height_map():
+def update_height_map(height_map, active_drops, new_drops):
     for drop in itertools.chain(active_drops,new_drops):
         for y in range(drop.get_lowest_y(), drop.get_highest_y() + 1):
             for x in range(drop.get_lowest_x(), drop.get_highest_x() + 1):
@@ -226,18 +253,18 @@ def update_height_map():
                     new_height = drop.get_height(x, y)
                     if height_map[x][y] < new_height:
                         height_map[x][y] = new_height
+    return height_map
 
 
-def smooth_height_map():
-    global height_map
-    height_map = ndimage.convolve(height_map, kernel, mode='constant', cval=0)
+def smooth_height_map(height_map):
+    return ndimage.convolve(height_map, kernel, mode='constant', cval=0)
 
 
-def floor_water():
+def floor_water(height_map):
     height_map[height_map < 0.2] = 0.0
+    return height_map
 
-
-def detect_intersections():
+def detect_intersections(active_drops, drop_array, new_drops):
     detections = []
     temp_array = []
     temp_array.extend(active_drops)
@@ -252,46 +279,31 @@ def detect_intersections():
     for drop_a in temp_array:
         for drop_b in drop_array:
             if drop_a.intersects(drop_b):
-                detections.append((drop_a,drop_b))
+                detections.append((drop_a, drop_b))
 
     return detections
 
 
-def merge_drops():
-    intersecting_drops = detect_intersections()
+def merge_drops(active_drops, drop_array, new_drops):
+    intersecting_drops = detect_intersections(active_drops, drop_array, new_drops)
 
     for a, b in intersecting_drops:
-        if a in drop_array and b in drop_array:
 
-            new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
+        new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
 
-            if a.y < b.y:
-                low_drop = a
-                high_drop = b
-            else:
-                low_drop = b
-                high_drop = b
+        if a.y < b.y:
+            low_drop = a
+            high_drop = b
+        else:
+            low_drop = b
+            high_drop = b
 
-            low_drop.velocity = new_velocity
-            low_drop.mass += b.mass
-            low_drop.calculate_radius()
-            if low_drop.mass <= m_static and hemispheres_enabled:
-                low_drop.generate_hemispheres()
-                if low_drop not in new_drops:
-                    new_drops.append(low_drop)
-                    drop_array.remove(low_drop)
-            elif a.mass > m_static and a not in active_drops:
-                active_drops.append(low_drop)
-
-            if high_drop in drop_array:
-                drop_array.remove(high_drop)
-            elif high_drop in active_drops:
-                active_drops.remove(high_drop)
-            elif high_drop in new_drops:
-                new_drops.remove(high_drop)
+        low_drop.velocity = new_velocity
+        low_drop.set_mass(low_drop.mass + high_drop.mass)
+        high_drop.delete()
 
 
-def trim_drops():
+def trim_drops(active_drops):
     drops_to_remove = []
     for drop in active_drops:
         radius = drop.radius
@@ -304,14 +316,8 @@ def trim_drops():
         active_drops.remove(drop)
 
 
-def empty_new_drop_arr():
-    global new_drops
-    drop_array.extend(new_drops)
-    new_drops = []
-
-
 ## File output
-def save(filename, fformat):
+def save(file_name, fformat, height_map):
     import PIL
     border = int(args.border)
 
@@ -321,7 +327,7 @@ def save(filename, fformat):
     height_map[:, height - border:] = 0
 
     if fformat == "txt":
-        np.savetxt(filename + ".txt", height_map, delimiter=",")
+        np.savetxt(file_name + ".txt", height_map, delimiter=",")
         print("File saved to " + file_name + ".txt")
 
     elif fformat == "png":
@@ -337,7 +343,7 @@ def save(filename, fformat):
         if int(args.show) == 1:
             im.show()
 
-        im.save(filename + ".png", 'PNG')
+        im.save(file_name + ".png", 'PNG')
         print("File saved to " + file_name + ".png")
 
 
@@ -362,6 +368,72 @@ def generate_time_stamp():
     from datetime import datetime
     now = datetime.now()  # current date and time
     return now.strftime("%m-%d0%Y-%H-%M-%S")
+
+
+def run_loop():
+    for i in range(int(args.runs)):
+        file_name = ""
+        drop_array = []
+        active_drops = []
+
+        height_map = np.zeros(shape=(width, height))
+
+        if int(args.runs) > 1:
+            if not args.name:
+                file_name = name + "_" + padded_zeros(args.runs, i)
+            else:
+                file_name = name + padded_zeros(args.runs, i)
+        else:
+            file_name = name
+
+        for ii in range(int(args.steps)):
+            new_drops = []
+
+            if show_time:
+                start_time = time.time()
+
+            active_drops, drop_array, new_drops = add_drops(int(args.drops), height_map, active_drops, drop_array, new_drops)      # Very fast
+            iterate_over_drops(active_drops)            # Very fast
+
+            if bool(args.leave_residuals):
+                leave_residual_droplets(height_map, active_drops, drop_array, new_drops)   # Very fast
+            merge_drops(active_drops, drop_array, new_drops)                   # Takes around 1/3 of the processing time
+            trim_drops(active_drops)                    # Very fast
+            height_map = update_height_map(height_map, active_drops, new_drops)             # Takes around 1/3 of the processing time
+            height_map = compute_height_map(height_map)            # Very fast
+
+            drop_array.extend(new_drops)
+            new_drops.clear()
+            print(len(drop_array))
+
+            output_string = "\rStep " + str(ii+1) + " out of " + args.steps + " is complete."
+
+            if show_time:
+                elapsed_time = time.time()-start_time
+                output_string = output_string + "\nCalculation took " + str(elapsed_time) + " seconds."
+            if show_drop_count:
+                output_string = output_string + "\nThere are currently " + str(len(drop_array)+len(active_drops)) + \
+                                " drops in the height map, of which " + str(len(active_drops)) + " are in motion."
+            if show_average_drop_mass:
+                masses = 0.0
+                for drop in drop_array:
+                    masses += drop.mass
+                avg_mass = masses/len(drop_array)
+                output_string = output_string + "\nThe average mass of the drops is " + str(avg_mass) + " kg."
+            print(output_string)
+
+        new_drops = drop_array
+        height_map = update_height_map(height_map, active_drops, drop_array)
+        height_map = compute_height_map(active_drops)
+
+        if args.format != "none":
+            if args.name:
+                save(args.path + file_name, args.format, height_map)
+            else:
+                save(args.path + file_name, args.format, height_map)
+
+        if (int(args.runs)) > 1:
+            print("\rRun " + str(i + 1) + " out of " + args.runs + " is complete.")
 
 
 if __name__ == '__main__':
@@ -496,63 +568,4 @@ if __name__ == '__main__':
     else:
         name = generate_time_stamp()
 
-    for i in range(int(args.runs)):
-        file_name = ""
-        drop_array = []
-        active_drops = []
-
-        height_map = np.zeros(shape=(width, height))
-
-        if int(args.runs) > 1:
-            if not args.name:
-                file_name = name + "_" + padded_zeros(args.runs, i)
-            else:
-                file_name = name + padded_zeros(args.runs, i)
-        else:
-            file_name = name
-
-        for ii in range(int(args.steps)):
-            new_drops = []
-
-            if show_time:
-                start_time = time.time()
-
-            add_drops(int(args.drops))      # Very fast
-            iterate_over_drops()            # Very fast
-
-            if bool(args.leave_residuals):
-                leave_residual_droplets()   # Very fast
-            merge_drops()                   # Takes around 1/3 of the processing time
-            trim_drops()                    # Very fast
-            update_height_map()             # Takes around 1/3 of the processing time
-            compute_height_map()            # Very fast
-            empty_new_drop_arr()
-
-            output_string = "\rStep " + str(ii+1) + " out of " + args.steps + " is complete."
-
-            if show_time:
-                elapsed_time = time.time()-start_time
-                output_string = output_string + "\nCalculation took " + str(elapsed_time) + " seconds."
-            if show_drop_count:
-                output_string = output_string + "\nThere are currently " + str(len(drop_array)+len(active_drops)) + \
-                                " drops in the height map, of which " + str(len(active_drops)) + " are in motion."
-            if show_average_drop_mass:
-                masses = 0.0
-                for drop in drop_array:
-                    masses += drop.mass
-                avg_mass = masses/len(drop_array)
-                output_string = output_string + "\nThe average mass of the drops is " + str(avg_mass) + " kg."
-            print(output_string)
-
-        new_drops = drop_array
-        update_height_map()
-        compute_height_map()
-
-        if args.format != "none":
-            if args.name:
-                save(args.path + file_name, args.format)
-            else:
-                save(args.path + file_name, args.format)
-
-        if (int(args.runs)) > 1:
-            print("\rRun " + str(i + 1) + " out of " + args.runs + " is complete.")
+    run_loop()
