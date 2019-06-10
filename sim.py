@@ -79,7 +79,7 @@ class Droplet:
             for drop_x, drop_y in drop.hemispheres:
                 delta_x = self_x - drop_x
                 delta_y = self_y - drop_y
-                if math.sqrt(delta_x**2 + delta_y**2) < drop.radius + self.radius:
+                if math.sqrt(delta_x**2 + delta_y**2) < drop.radius + self.radius + attraction_radius:
                     return True
         return False
 
@@ -184,10 +184,10 @@ def iterate_over_drops():
         delta_x_sqr = (old_x - drop.x) ** 2
         delta_y_sqr = (old_y - drop.y) ** 2
         if drop.radius**2 > delta_x_sqr + delta_y_sqr:
-            leave_streaks(old_x,old_y,drop)
+            leave_streaks(old_x, old_y, drop)
 
 
-def leave_streaks(old_x,old_y, drop):
+def leave_streaks(old_x, old_y, drop):
     if old_x == drop.x:
         for y in range(old_y,drop.y):
             center_x = drop.x + random.randint(-2, 2)
@@ -238,7 +238,6 @@ def floor_water():
 
 
 def detect_intersections():
-    # TODO: implement ID map
     detections = []
     temp_array = []
     temp_array.extend(active_drops)
@@ -311,6 +310,7 @@ def empty_new_drop_arr():
     new_drops = []
 
 
+## File output
 def save(filename, fformat):
     import PIL
     border = int(args.border)
@@ -322,6 +322,7 @@ def save(filename, fformat):
 
     if fformat == "txt":
         np.savetxt(filename + ".txt", height_map, delimiter=",")
+        print("File saved to " + file_name + ".txt")
 
     elif fformat == "png":
         from PIL import Image
@@ -337,6 +338,7 @@ def save(filename, fformat):
             im.show()
 
         im.save(filename + ".png", 'PNG')
+        print("File saved to " + file_name + ".png")
 
 
 def set_up_directories():
@@ -382,6 +384,9 @@ if __name__ == '__main__':
     parser.add_argument('--drops', dest='drops', default=5,
                         help='Sets the number of drops added to the height map '
                              'each time step.')
+
+    parser.add_argument('--merge_radius', dest='attraction', default=2,
+                        help='Drops will now merge if they are separated by less than n pixels')
 
     parser.add_argument('--residual_drops', dest='leave_residuals', default=True,
                         help='Enables leaving residual drops')
@@ -451,11 +456,12 @@ if __name__ == '__main__':
     m_min = float(args.m_min)
     m_max = float(args.m_max)
     average_mass = float(args.m_avg)
-    deviation_mass = args.m_dev  # normally distributed
+    deviation_mass = float(args.m_dev)  # normally distributed
     hemispheres_enabled = bool(args.enable_hemispheres)
     max_hemispheres = int(args.max_hemispheres)
     m_static = average_mass + deviation_mass * st.norm.ppf(float(args.m_static))
     friction_constant_force = m_static * gravity
+    attraction_radius = int(args.attraction)
 
     time_step = float(args.time)
     t_max = time_step * 4
