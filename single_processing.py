@@ -105,16 +105,16 @@ class Droplet:
         if len(self.hemispheres) == 1:
             return np.sqrt(self.radius ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
 
-        else:                                                                           # This does not work correctly
+        else:
             summation = 0.0
 
-            for hemi_x, hemi_y in self.hemispheres:                                               # for each hemisphere, check if point is in bounds
+            for hemi_x, hemi_y in self.hemispheres:
                 delta_x = x - hemi_x
                 delta_y = y - hemi_y
                 rad_sqr = self.radius ** 2
-                distance_from_center_sqr = delta_x ** 2 + delta_y ** 2  # distance (pythagoras)
-                if rad_sqr >= distance_from_center_sqr:                                 # in bounds?
-                    summation += np.sqrt(rad_sqr - distance_from_center_sqr)  # if yes, add height to total
+                distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
+                if rad_sqr >= distance_from_center_sqr:
+                    summation += np.sqrt(rad_sqr - distance_from_center_sqr)
 
             return summation
 
@@ -203,7 +203,7 @@ def leave_residual_droplets():
         if drop.mass > m_static:
             if drop.residual_probability() < np.random.uniform():
                 drop.t_i = 0
-                a = np.random.uniform(0.05, 0.15)
+                a = np.random.uniform(0.10, 0.30)
                 new_drop_mass = min(m_static, a*drop.mass)
                 drop.mass -= new_drop_mass
                 drop.calculate_radius()
@@ -395,8 +395,8 @@ if __name__ == '__main__':
                 leave_residual_droplets()  # Very fast
             merge_drops()  # Takes around 1/3 of the processing time
             trim_drops()  # Very fast
-            update_height_map()  # Takes around 1/3 of the processing time
-            compute_height_map()  # Very fast
+            update_height_map()
+            compute_height_map()
             empty_new_drop_arr()
 
             print(compose_string(start_time, drop_array, active_drops, args))

@@ -249,7 +249,7 @@ def compute_height_map(height_map, args):
 
 
 def update_height_map(args, height_map, active_drops, new_drops=[]):
-    for drop in itertools.chain(active_drops,new_drops):
+    for drop in itertools.chain(active_drops, new_drops):
         for y in range(drop.get_lowest_y(), drop.get_highest_y() + 1):
             for x in range(drop.get_lowest_x(), drop.get_highest_x() + 1):
                 if (0 <= y < args.height) and (0 <= x < args.width):

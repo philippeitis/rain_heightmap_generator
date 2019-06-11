@@ -29,6 +29,7 @@ def parse_arguments():
                         help='Type of kernel used in smoothing step. '
                              '(dwn for downward trending, avg for averaging kernel)')
 
+    parser.add_argument('--dist', dist='dist', default="normal", choices=["normal", "uniform", ""])
     parser.add_argument('--mmin', dest='m_min', default=0.000001, type=float,
                         help='Minimum mass of droplets (kg)')
     parser.add_argument('--mavg', dest='m_avg', default=0.000034, type=float,
@@ -36,7 +37,7 @@ def parse_arguments():
     parser.add_argument('--mdev', dest='m_dev', default=0.000016, type=float,
                         help='Average deviation of drops (kg). Higher '
                              'values create more diverse drop sizes.')
-    parser.add_argument('--mmax', dest='m_max', default=1, type=float,
+    parser.add_argument('--mmax', dest='m_max', default=0.000240, type=float,
                         help='Maximum mass of droplets (kg)')
     parser.add_argument('--mstatic', dest='m_static', default=0.8, type=float,
                         help='Sets the percentage of drops that are static.')
