@@ -117,14 +117,17 @@ class Droplet:
         if len(self.path) != 0:
             summation = 0.0
             count = 0
+            max_height = 0
             for path_x, path_y in self.hemispheres:
                 delta_x = x - path_x
                 delta_y = y - path_y
                 rad_sqr = self.radius ** 2
                 distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
                 if rad_sqr >= distance_from_center_sqr:
+                    max_height = max(max_height, np.sqrt(rad_sqr - distance_from_center_sqr))
                     summation += np.sqrt(rad_sqr - distance_from_center_sqr)
                     count += 1
+            return max_height
             if count != 0:
                 return summation / count
             return summation
