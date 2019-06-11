@@ -196,6 +196,7 @@ def leave_streaks(old_x, old_y, drop):
                     height_map[x, y] = max(np.sqrt(drop.radius ** 2 - (x - center_x) ** 2),height_map[x,y])
     # Todo: add support for diagonal streaks
 
+
 # Goes over all active drops, and has them leave
 def leave_residual_droplets():
     for drop in active_drops:
@@ -334,6 +335,7 @@ def compose_string(start_time, drop_array, active_drops, args):
 
 
 if __name__ == '__main__':
+
     import arg_parser as ap
     import file_ops as fo
     import time
@@ -367,13 +369,13 @@ if __name__ == '__main__':
     fo.set_up_directories(args)
 
     if args.kernel == "dwn":
-        kernel = np.array([[4/27, 1/9, 2/27],
-                       [4/27, 1/9, 2/27],
-                       [4/27, 1/9, 2/27]])
+        kernel = np.array([[4 / 27, 1 / 9, 2 / 27],
+                           [4 / 27, 1 / 9, 2 / 27],
+                           [4 / 27, 1 / 9, 2 / 27]])
     else:
-        kernel = np.array([[1/9, 1/9, 1/9],
-                        [1/9, 1/9, 1/9],
-                        [1/9, 1/9, 1/9]])
+        kernel = np.array([[1 / 9, 1 / 9, 1 / 9],
+                           [1 / 9, 1 / 9, 1 / 9],
+                           [1 / 9, 1 / 9, 1 / 9]])
 
     for i in range(int(args.runs)):
         drop_array = []

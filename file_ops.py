@@ -15,7 +15,6 @@ def save(file_name, height_map, args):
 
     if fformat == "txt":
         np.savetxt(file_name + ".txt", height_map, delimiter=",")
-        print("File saved to " + file_name + ".txt")
 
     elif fformat == "png":
         from PIL import Image
@@ -27,11 +26,15 @@ def save(file_name, height_map, args):
                 pixel_val = math.floor(height_map[x, y] / maximum_drop_size * 255)
                 pixels[x, y] = (pixel_val, pixel_val, pixel_val)
 
-        if int(args.show) == 1:
+        if args.show:
             im.show()
 
         im.save(file_name + ".png", 'PNG')
-        print("File saved to " + file_name + ".png")
+
+    elif fformat == "npy":
+        np.save(file_name, height_map)
+
+    print("File saved to " + file_name + "." + fformat)
 
 
 def set_up_directories(args):

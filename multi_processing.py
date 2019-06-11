@@ -7,7 +7,7 @@ from scipy import ndimage
 
 
 class Droplet:
-    def __init__(self, x, y, mass, velocity, height_map, active_drops, drop_array, new_drops, args):
+    def __init__(self, x, y, mass, velocity, height_map, active_drops, drop_array, new_drops, args = None):
         self.height_map = height_map
         self.active_drops = active_drops
         self.drop_array = drop_array
@@ -21,7 +21,6 @@ class Droplet:
         self.direction = 0
         self.t_i = 0
         self.hemispheres = [(self.x, self.y)]  # (x,y) tuples (could add z to represent share of mass)
-        self.generate_hemispheres()
         self.radius = 0
         self.set_mass(mass)
 
@@ -366,6 +365,7 @@ def run_loop(queue, args):
 if __name__ == '__main__':
     import arg_parser
     import file_ops as fo
+    import single_processing as sp
     args = arg_parser.parse_arguments()
 
     fo.set_up_directories(args)

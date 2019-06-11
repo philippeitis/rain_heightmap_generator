@@ -25,7 +25,7 @@ def parse_arguments():
                         help='Enables leaving residual drops')
     parser.add_argument('--beta', dest='beta', default=0.5, type=float,
                         help='Sets value b in equation used to determine if drop should be left or not')
-    parser.add_argument('--kernel', dest='kernel', default="dwn", type=str,
+    parser.add_argument('--kernel', dest='kernel', default="dwn", type=str, choices=['dwn','avg'],
                         help='Type of kernel used in smoothing step. '
                              '(dwn for downward trending, avg for averaging kernel)')
 
@@ -59,17 +59,18 @@ def parse_arguments():
     parser.add_argument('--name', dest='name', type=str,
                         help='Output file name. If not defined, program defaults to using date-time string.')
 
-    parser.add_argument('--s', dest='show', default=0, type=int,
+    parser.add_argument('--s', dest='show', default=False, type=bool,
                         help='Show image on program completion..')
 
-    parser.add_argument('--f', dest='format', default="png", type=str,
+    parser.add_argument('--f', dest='format', default="png", type=str, choices=['png', 'txt', 'npy'],
                         help='Output file format (png, txt, or npy).')
     parser.add_argument('--border', dest='border', default=0, type=int,
                         help='Sets all values within border pixels of the edge to 0')
 
     parser.add_argument('--runs', dest='runs', default=1, type=int,
                         help='Will execute the program with the given parameters repeatedly.')
-
+    parser.add_argument('--mt', dest='mt', default=1, type=int,
+                        help='Will execute the program in a multithreading capacity.')
     parser.add_argument('--verbose', dest='verbose', default="", type=str,
                         help='Will output detailed information on program operation. '
                         't : time to execute each step, '
