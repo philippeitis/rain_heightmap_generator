@@ -211,7 +211,7 @@ def iterate_over_drops(active_drops, args):
     for drop in active_drops:
         old_x = drop.x
         old_y = drop.y
-        ## TODO: handling for fast particles (and streaks of water)
+        # TODO: handling for fast particles (and streaks of water)
         drop.iterate_position()
         delta_x_sqr = (old_x - drop.x) ** 2
         delta_y_sqr = (old_y - drop.y) ** 2
