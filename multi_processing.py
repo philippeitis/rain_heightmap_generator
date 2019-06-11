@@ -324,8 +324,7 @@ def trim_drops(active_drops, args):
             drops_to_remove.append(drop)
 
     for drop in drops_to_remove:
-        active_drops.remove(drop)
-
+        drop.delete()
 
 def run_loop(queue, args):
     import file_ops as fo

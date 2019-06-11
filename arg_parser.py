@@ -62,7 +62,9 @@ def parse_arguments():
                         help='Output file name. If not defined, program defaults to using date-time string.')
 
     parser.add_argument('--s', dest='show', default=False, type=bool,
-                        help='Show image on program completion..')
+                        help='Show image on program completion.')
+    parser.add_argument('--silent', dest='silent', default=False, type=bool,
+                        help='Suppress all command line printing...')
 
     parser.add_argument('--f', dest='format', default="png", type=str, choices=['png', 'txt', 'npy'],
                         help='Output file format (png, txt, or npy).')

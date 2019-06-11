@@ -70,3 +70,4 @@ def choose_file_name(args, curr_run):
         name += padded_zeros(args.runs,curr_run)
 
     return name
+
