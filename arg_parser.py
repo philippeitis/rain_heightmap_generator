@@ -1,0 +1,79 @@
+def parse_arguments():
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Create the height map for rain on a surface.')
+    parser.add_argument('steps', type=int, help='Number of simulation steps to run') # around 50 time steps is good
+
+    parser.add_argument('--imw', dest='width', default=720, type=int,
+                        help='Sets the width of the height map and the output file.')
+    parser.add_argument('--imh', dest='height', default=480, type=int,
+                        help='Sets the height of the height map and the output file.')
+    parser.add_argument('--width', dest='scale', default=0.3, type=float,
+                        help='Scale factor of height map')
+
+    parser.add_argument('--w', dest='density_water', default=1000, type=int,
+                        help='Sets the density of water, in kg/m^3')
+
+    parser.add_argument('--drops', dest='drops', default=5, type=int,
+                        help='Sets the number of drops added to the height map '
+                             'each time step.')
+
+    parser.add_argument('--merge_radius', dest='attraction', default=2, type=int,
+                        help='Drops will now merge if they are separated by less than n pixels')
+
+    parser.add_argument('--residual_drops', dest='leave_residuals', default=True, type=bool,
+                        help='Enables leaving residual drops')
+    parser.add_argument('--beta', dest='beta', default=0.5, type=float,
+                        help='Sets value b in equation used to determine if drop should be left or not')
+    parser.add_argument('--kernel', dest='kernel', default="dwn", type=str,
+                        help='Type of kernel used in smoothing step. '
+                             '(dwn for downward trending, avg for averaging kernel)')
+
+    parser.add_argument('--mmin', dest='m_min', default=0.000001, type=float,
+                        help='Minimum mass of droplets (kg)')
+    parser.add_argument('--mavg', dest='m_avg', default=0.000034, type=float,
+                        help='Average mass of drops (kg)')
+    parser.add_argument('--mdev', dest='m_dev', default=0.000016, type=float,
+                        help='Average deviation of drops (kg). Higher '
+                             'values create more diverse drop sizes.')
+    parser.add_argument('--mmax', dest='m_max', default=1, type=float,
+                        help='Maximum mass of droplets (kg)')
+    parser.add_argument('--mstatic', dest='m_static', default=0.8, type=float,
+                        help='Sets the percentage of drops that are static.')
+
+    parser.add_argument('--hemispheres', dest='enable_hemispheres', default=True, type=bool,
+                        help='Enables drops with multiple hemispheres (on by default)')
+    parser.add_argument('--numh', dest='max_hemispheres', default=5, type=int,
+                        help='Maximum number of hemispheres per drop. '
+                             'Performance drops off rapidly after 15 hemispheres.')
+
+    parser.add_argument('--g', dest='g', default=9.81, type=float,
+                        help='Gravitational constant (m/s)')
+
+    parser.add_argument('--time', dest='time', default=0.001, type=float,
+                        help='Duration of each time step (in seconds)')
+
+    parser.add_argument('--path', dest='path', default="./", type=str,
+                        help='Output file path. If not defined, program defaults to same folder.')
+
+    parser.add_argument('--name', dest='name', type=str,
+                        help='Output file name. If not defined, program defaults to using date-time string.')
+
+    parser.add_argument('--s', dest='show', default=0, type=int,
+                        help='Show image on program completion..')
+
+    parser.add_argument('--f', dest='format', default="png", type=str,
+                        help='Output file format (png, txt, or npy).')
+    parser.add_argument('--border', dest='border', default=0, type=int,
+                        help='Sets all values within border pixels of the edge to 0')
+
+    parser.add_argument('--runs', dest='runs', default=1, type=int,
+                        help='Will execute the program with the given parameters repeatedly.')
+
+    parser.add_argument('--verbose', dest='verbose', default="", type=str,
+                        help='Will output detailed information on program operation. '
+                        't : time to execute each step, '
+                        'd : number of droplets in each step, '
+                        'a : average mass of droplets in each step.')
+
+    return parser.parse_args()

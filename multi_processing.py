@@ -328,66 +328,8 @@ def trim_drops(active_drops, args):
         active_drops.remove(drop)
 
 
-## File output
-def save(file_name, fformat, height_map, args):
-    import PIL
-    border = int(args.border)
-
-    height_map[0:border] = 0
-    height_map[args.width - border:] = 0
-    height_map[:, 0:border] = 0
-    height_map[:, args.height - border:] = 0
-
-    if fformat == "txt":
-        np.savetxt(file_name + ".txt", height_map, delimiter=",")
-        print("File saved to " + file_name + ".txt")
-
-    elif fformat == "png":
-        from PIL import Image
-        maximum_drop_size = np.amax(height_map)
-        im = PIL.Image.new('RGBA', (args.width, args.height), 0)
-        pixels = im.load()
-        for x in range(args.width):
-            for y in range(args.height):
-                pixel_val = math.floor(height_map[x, y] / maximum_drop_size * 255)
-                pixels[x, y] = (pixel_val, pixel_val, pixel_val)
-
-        if int(args.show) == 1:
-            im.show()
-
-        im.save(file_name + ".png", 'PNG')
-        print("File saved to " + file_name + ".png")
-
-
-def set_up_directories():
-    import os
-    if args.path != "./":
-        try:
-            os.mkdir(args.path)
-            print("Directory created.")
-        except FileExistsError:
-            print("Directory already exists.")
-
-
-def padded_zeros(ref_string, curr_num):
-    out_string = str(curr_num)
-    while len(out_string) < len(str(ref_string)):
-        out_string = "0" + out_string
-    return out_string
-
-
-def generate_time_stamp():
-    from datetime import datetime
-    now = datetime.now()  # current date and time
-    return now.strftime("%m-%d0%Y-%H-%M-%S")
-
-
 def run_loop(queue, args):
-    if args.name:
-        name = args.name
-    else:
-        name = generate_time_stamp()
-
+    import file_ops as fo
     while not queue.empty():
         curr_run = queue.get()
 
@@ -396,27 +338,19 @@ def run_loop(queue, args):
         print("Staring process " + str(curr_run))
         height_map = np.zeros(shape=(args.width, args.height))
 
-        if int(args.runs) > 1:
-            if not args.name:
-                file_name = name + "_" + padded_zeros(args.runs, curr_run)
-            else:
-                file_name = name + padded_zeros(args.runs, curr_run)
-        else:
-            file_name = name
-
         for ii in range(int(args.steps)):
             new_drops = []
 
-            add_drops(height_map, active_drops, drop_array, new_drops, args)      # Very fast
+            add_drops(height_map, active_drops, drop_array, new_drops, args)
 
-            iterate_over_drops(active_drops, args)            # Very fast
+            iterate_over_drops(active_drops, args)
 
             if args.leave_residuals:
-                leave_residual_droplets(height_map, active_drops, drop_array, new_drops, args)   # Very fast
-            merge_drops(active_drops, drop_array, new_drops)                   # Takes around 1/3 of the processing time
-            trim_drops(active_drops, args)                    # Very fast
-            update_height_map(args, height_map, active_drops)             # Takes around 1/3 of the processing time
-            compute_height_map(height_map, args)            # Very fast
+                leave_residual_droplets(height_map, active_drops, drop_array, new_drops, args)
+            merge_drops(active_drops, drop_array, new_drops)
+            trim_drops(active_drops, args)
+            update_height_map(args, height_map, active_drops)
+            compute_height_map(height_map, args)
 
             drop_array.extend(new_drops)
             new_drops.clear()
@@ -424,99 +358,17 @@ def run_loop(queue, args):
         update_height_map(args, height_map, active_drops, drop_array)
         compute_height_map(height_map, args)
 
-        if args.format != "none":
-            if args.name:
-                save(args.path + file_name, args.format, height_map, args)
-            else:
-                save(args.path + file_name, args.format, height_map, args)
+        fo.save(fo.choose_file_name(args, curr_run), height_map, args)
 
         print("\rRun " + str(curr_run + 1) + " out of " + str(args.runs) + " is complete.")
 
 
 if __name__ == '__main__':
-    import argparse
+    import arg_parser
+    import file_ops as fo
+    args = arg_parser.parse_arguments()
 
-    parser = argparse.ArgumentParser(description='Create the height map for rain on a surface.')
-    parser.add_argument('steps', type=int, help='Number of simulation steps to run') # around 50 time steps is good
-
-    parser.add_argument('--imw', dest='width', default=720, type=int,
-                        help='Sets the width of the height map and the output file.')
-    parser.add_argument('--imh', dest='height', default=480, type=int,
-                        help='Sets the height of the height map and the output file.')
-    parser.add_argument('--width', dest='scale', default=0.3, type=float,
-                        help='Scale factor of height map')
-
-    parser.add_argument('--w', dest='density_water', default=1000, type=int,
-                        help='Sets the density of water, in kg/m^3')
-
-    parser.add_argument('--drops', dest='drops', default=5, type=int,
-                        help='Sets the number of drops added to the height map '
-                             'each time step.')
-
-    parser.add_argument('--merge_radius', dest='attraction', default=2, type=int,
-                        help='Drops will now merge if they are separated by less than n pixels')
-
-    parser.add_argument('--residual_drops', dest='leave_residuals', default=True, type=bool,
-                        help='Enables leaving residual drops')
-    parser.add_argument('--beta', dest='beta', default=0.5, type=float,
-                        help='Sets value b in equation used to determine if drop should be left or not')
-    parser.add_argument('--kernel', dest='kernel', default="dwn", type=str,
-                        help='Type of kernel used in smoothing step. '
-                             '(dwn for downward trending, avg for averaging kernel)')
-
-    parser.add_argument('--mmin', dest='m_min', default=0.000001, type=float,
-                        help='Minimum mass of droplets (kg)')
-    parser.add_argument('--mavg', dest='m_avg', default=0.000034, type=float,
-                        help='Average mass of drops (kg)')
-    parser.add_argument('--mdev', dest='m_dev', default=0.000016, type=float,
-                        help='Average deviation of drops (kg). Higher '
-                             'values create more diverse drop sizes.')
-    parser.add_argument('--mmax', dest='m_max', default=1, type=float,
-                        help='Maximum mass of droplets (kg)')
-    parser.add_argument('--mstatic', dest='m_static', default=0.8, type=float,
-                        help='Sets the percentage of drops that are static.')
-
-    parser.add_argument('--hemispheres', dest='enable_hemispheres', default=True, type=bool,
-                        help='Enables drops with multiple hemispheres (on by default)')
-    parser.add_argument('--numh', dest='max_hemispheres', default=5, type=int,
-                        help='Maximum number of hemispheres per drop. '
-                             'Performance drops off rapidly after 15 hemispheres.')
-
-    parser.add_argument('--g', dest='g', default=9.81, type=float,
-                        help='Gravitational constant (m/s)')
-
-    parser.add_argument('--time', dest='time', default=0.001, type=float,
-                        help='Duration of each time step (in seconds)')
-
-    parser.add_argument('--path', dest='path', default="./", type=str,
-                        help='Output file path. If not defined, program defaults to same folder.')
-
-    parser.add_argument('--name', dest='name', type=str,
-                        help='Output file name. If not defined, program defaults to using date-time string.')
-
-    parser.add_argument('--s', dest='show', default=0, type=int,
-                        help='Show image on program completion..')
-
-    parser.add_argument('--f', dest='format', default="png", type=str,
-                        help='Output file format (png, txt, or npy).')
-    parser.add_argument('--border', dest='border', default=0, type=int,
-                        help='Sets all values within border pixels of the edge to 0')
-
-    parser.add_argument('--runs', dest='runs', default=1, type=int,
-                        help='Will execute the program with the given parameters repeatedly.')
-
-    parser.add_argument('--verbose', dest='verbose', default="", type=str,
-                        help='Will output detailed information on program operation. '
-                        't : time to execute each step, '
-                        'd : number of droplets in each step, '
-                        'a : average mass of droplets in each step.')
-
-    args = parser.parse_args()
-
-    temp_name = "temp"
-    temp_path = "./temp/"
-
-    set_up_directories()
+    fo.set_up_directories(args)
 
     if args.runs >= 1:
         import multiprocessing
