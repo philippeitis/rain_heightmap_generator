@@ -195,7 +195,11 @@ def choose_direction(droplet):
 # masses bounded by m_min and m_max
 def add_drops(avg):
     for x in range(avg):
-        mass = min(m_max,max(m_min, np.random.normal(average_mass, deviation_mass, 1)))
+        if args.dist == "normal":
+            mass = min(m_max,max(m_min, np.random.normal(average_mass, deviation_mass, 1)))
+        elif args.dist == "uniform":
+            mass = np.random.uniform(m_min,m_max)
+
         drop_to_add = Droplet(random.randint(0, width), random.randint(0, height), mass)
         if mass > m_static:
             active_drops.append(drop_to_add)
@@ -206,24 +210,7 @@ def add_drops(avg):
 # Iterates over all active drops (which are moving faster than a given speed) to update their position
 def iterate_over_drops():
     for drop in active_drops:
-        old_x = drop.x
-        old_y = drop.y
-        ## TODO: handling for fast particles (and streaks of water)
         drop.iterate_position()
-        delta_x_sqr = (old_x - drop.x) ** 2
-        delta_y_sqr = (old_y - drop.y) ** 2
-        if drop.radius**2 > delta_x_sqr + delta_y_sqr:
-            leave_streaks(old_x, old_y, drop)
-
-
-def leave_streaks(old_x, old_y, drop):
-    if old_x == drop.x:
-        for y in range(old_y,drop.y):
-            center_x = drop.x + random.randint(-2, 2)
-            for x in range(center_x - math.floor(0.8 * drop.radius), math.ceil(center_x + 0.8 * drop.radius)):
-                if (0 <= y < height) and (0 <= x < width):
-                    height_map[x, y] = max(np.sqrt(drop.radius ** 2 - (x - center_x) ** 2),height_map[x,y])
-    # Todo: add support for diagonal streaks
 
 
 # Goes over all active drops, and has them leave
