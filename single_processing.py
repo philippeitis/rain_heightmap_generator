@@ -56,20 +56,17 @@ class Droplet:
 
     def iterate_position(self):
         if self.mass > m_static:
-            self.path = [(self.x,self.y)]
+            self.path = [(self.x, self.y)]
             acceleration = (self.mass * gravity - friction_constant_force)/self.mass
             self.velocity = self.velocity + acceleration * time_step
-            for i in range(math.ceil(self.velocity)):
-                self.direction = choose_direction(self)
-                if self.direction == -1:
-                    self.x -= 1
-                if self.direction == 1:
-                    self.x += 1
+            for i in range(math.ceil(self.velocity * scale_factor * width)):
+                self.x += choose_direction(self)
                 self.y += 1
                 self.t_i += 1
-                self.path.append((self.x,self.y))
+                self.path.append((self.x, self.y))
 
             self.hemispheres = [(self.x, self.y)]
+        print(self.velocity * scale_factor * width)
 
     def intersects(self, drop):
         if drop.get_lowest_y() < self.get_highest_y() or drop.get_highest_y() > self.get_lowest_y():
