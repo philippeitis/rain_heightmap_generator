@@ -365,7 +365,7 @@ def run_loop(queue, args):
 if __name__ == '__main__':
     import arg_parser
     import file_ops as fo
-    import single_processing as sp
+    import sim as sp
     args = arg_parser.parse_arguments()
 
     fo.set_up_directories(args)

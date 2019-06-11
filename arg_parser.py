@@ -29,7 +29,8 @@ def parse_arguments():
                         help='Type of kernel used in smoothing step. '
                              '(dwn for downward trending, avg for averaging kernel)')
 
-    parser.add_argument('--dist', dist='dist', default="normal", choices=["normal", "uniform", ""])
+    parser.add_argument('--dist', dest='dist', default="normal", choices=["normal", "uniform"],
+                        help='Distribution used for determining drop masses.')
     parser.add_argument('--mmin', dest='m_min', default=0.000001, type=float,
                         help='Minimum mass of droplets (kg)')
     parser.add_argument('--mavg', dest='m_avg', default=0.000034, type=float,
