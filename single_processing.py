@@ -19,6 +19,7 @@ class Droplet:
             self.generate_hemispheres()
 
         self.radius = 0
+        self.path = []
         self.calculate_radius()
 
     def calculate_radius(self):
@@ -29,7 +30,7 @@ class Droplet:
         # Random walk to decide locations of hemispheres.
         self.hemispheres = [(self.x, self.y)]
         num_hemispheres = random.randint(1, max_hemispheres)
-        directions = (1,2,3,4)
+        directions = (1, 2, 3, 4)
         next_dirs = directions
         while len(self.hemispheres) < num_hemispheres:
             new_x, new_y = self.hemispheres[-1]
@@ -57,19 +58,20 @@ class Droplet:
             acceleration = (self.mass * gravity - friction_constant_force)/self.mass
             self.velocity = self.velocity + acceleration * time_step
             if self.velocity > 0:
-                self.direction = choose_direction(self)
-                if self.direction == -1:
-                    self.x -= math.floor(math.sqrt(self.velocity) * scale_factor * width) + random.randint(-2,2)
-                    self.y += math.floor(math.sqrt(self.velocity) * scale_factor * width) + random.randint(-2,2)
-                if self.direction == 0:
-                    self.y += math.floor(self.velocity * scale_factor * width) + random.randint(-2,2)
-                if self.direction == 1:
-                    self.x += math.floor(math.sqrt(self.velocity) * scale_factor * width) + random.randint(-2,2)
-                    self.y += math.floor(math.sqrt(self.velocity) * scale_factor * width) + random.randint(-2,2)
+                self.path = [(self.x, self.y)]
+                for i in range(math.ceil(self.velocity)):
+                    self.direction = choose_direction(self)
+                    if self.direction == -1:
+                        self.x -= 1
+                        self.y += 1
+                    if self.direction == 0:
+                        self.y += 1
+                    if self.direction == -1:
+                        self.x += 1
+                        self.y += 1
+                    self.path.append((self.x, self.y))
 
-                # This determines if we should leave a droplet behind
                 self.t_i += 1
-            self.hemispheres = [(self.x, self.y)]
 
     def intersects(self, drop):
         if drop.get_lowest_y() < self.get_highest_y() or drop.get_highest_y() > self.get_lowest_y():
@@ -90,20 +92,49 @@ class Droplet:
             return 0
 
     def get_lowest_y(self):
-        return min(self.hemispheres, key=lambda t: t[1])[1] - math.ceil(self.radius)
+        if self.mass < m_static or len(self.path) == 0:
+            return min(self.hemispheres, key=lambda t: t[1])[1] - math.ceil(self.radius)
+        else:
+            return min(self.path, key=lambda t: t[1])[1] - math.ceil(self.radius)
 
     def get_highest_y(self):
-        return max(self.hemispheres, key=lambda t: t[1])[1] + math.ceil(self.radius)
+        if self.mass < m_static or len(self.path) == 0:
+            return max(self.hemispheres, key=lambda t: t[1])[1] + math.ceil(self.radius)
+        else:
+            return max(self.path, key=lambda t: t[1])[1] + math.ceil(self.radius)
 
     def get_lowest_x(self):
-        return min(self.hemispheres, key=lambda t: t[0])[0] - math.ceil(self.radius)
+        if self.mass < m_static or len(self.path) == 0:
+            return min(self.hemispheres, key=lambda t: t[0])[0] - math.ceil(self.radius)
+        else:
+            return min(self.path, key=lambda t: t[0])[0] - math.ceil(self.radius)
 
     def get_highest_x(self):
-        return max(self.hemispheres, key=lambda t: t[0])[0] + math.ceil(self.radius)
+        if self.mass < m_static or len(self.path) == 0:
+            return max(self.hemispheres, key=lambda t: t[0])[0] + math.ceil(self.radius)
+        else:
+            return max(self.path, key=lambda t: t[0])[0] + math.ceil(self.radius)
 
     def get_height(self, x, y):
         if len(self.hemispheres) == 1:
-            return np.sqrt(self.radius ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
+            if len(self.path) == 1:
+                return np.sqrt(self.radius ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
+            else:
+                summation = 0.0
+                count = 0
+                for path_x, path_y in self.path:
+                    delta_x = x - path_x
+                    delta_y = y - path_y
+                    rad_sqr = self.radius ** 2
+                    distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
+                    if rad_sqr >= distance_from_center_sqr:
+                        count += 1
+                        summation += np.sqrt(rad_sqr - distance_from_center_sqr)
+
+                if count != 0:
+                    return summation / count
+                else:
+                    return 0
 
         else:
             summation = 0.0
@@ -166,7 +197,10 @@ def choose_direction(droplet):
 # masses bounded by m_min and m_max
 def add_drops(avg):
     for x in range(avg):
-        mass = min(m_max,max(m_min, np.random.normal(average_mass, deviation_mass, 1)))
+        if args.dist == "uniform":
+            mass = np.random.uniform(m_min,m_max)
+        if args.dist == "normal":
+            mass = min(m_max,max(m_min, np.random.normal(average_mass, deviation_mass, 1)))
         drop_to_add = Droplet(random.randint(0, width), random.randint(0, height), mass)
         if mass > m_static:
             active_drops.append(drop_to_add)
@@ -181,20 +215,6 @@ def iterate_over_drops():
         old_y = drop.y
         ## TODO: handling for fast particles (and streaks of water)
         drop.iterate_position()
-        delta_x_sqr = (old_x - drop.x) ** 2
-        delta_y_sqr = (old_y - drop.y) ** 2
-        if drop.radius**2 > delta_x_sqr + delta_y_sqr:
-            leave_streaks(old_x, old_y, drop)
-
-
-def leave_streaks(old_x, old_y, drop):
-    if old_x == drop.x:
-        for y in range(old_y,drop.y):
-            center_x = drop.x + random.randint(-2, 2)
-            for x in range(center_x - math.floor(0.8 * drop.radius), math.ceil(center_x + 0.8 * drop.radius)):
-                if (0 <= y < height) and (0 <= x < width):
-                    height_map[x, y] = max(np.sqrt(drop.radius ** 2 - (x - center_x) ** 2),height_map[x,y])
-    # Todo: add support for diagonal streaks
 
 
 # Goes over all active drops, and has them leave
@@ -221,12 +241,14 @@ def compute_height_map():
 
 def update_height_map():
     for drop in itertools.chain(active_drops,new_drops):
-        for y in range(drop.get_lowest_y(), drop.get_highest_y() + 1):
-            for x in range(drop.get_lowest_x(), drop.get_highest_x() + 1):
+        for y in range(drop.get_lowest_y(), drop.get_highest_y()):
+            for x in range(drop.get_lowest_x(), drop.get_highest_x()):
                 if (0 <= y < height) and (0 <= x < width):
                     new_height = drop.get_height(x, y)
                     if height_map[x][y] < new_height:
                         height_map[x][y] = new_height
+        drop.path = []
+
 
 
 def smooth_height_map():
@@ -356,7 +378,11 @@ if __name__ == '__main__':
     deviation_mass = args.m_dev  # normally distributed
     hemispheres_enabled = args.enable_hemispheres
     max_hemispheres = args.max_hemispheres
-    m_static = average_mass + deviation_mass * st.norm.ppf(args.m_static)
+    if args.dist == "normal":
+        m_static = average_mass + deviation_mass * st.norm.ppf(args.m_static)
+    elif args.dist == "uniform":
+        m_static = m_max * args.m_static
+
     friction_constant_force = m_static * gravity
     attraction_radius = args.attraction
 
