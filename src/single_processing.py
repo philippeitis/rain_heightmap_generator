@@ -19,10 +19,12 @@ friction_constant_force = None
 attraction_radius = None
 
 beta, time_step, t_max = None, None, None
+residual_floor, residual_ceil = None, None
 
 active_drops, drop_array, new_drops = None, None, None
 
 height_map, kernel = None, None
+floor_value = None
 
 
 class Droplet:
@@ -245,7 +247,7 @@ def leave_residual_droplets():
         if drop.mass > m_static:
             if drop.residual_probability() < np.random.uniform():
                 drop.t_i = 0
-                a = np.random.uniform(0.10, 0.30) # Pass in as command line args
+                a = np.random.uniform(residual_floor, residual_ceil) # Pass in as command line args
                 new_drop_mass = min(m_static, a*drop.mass)
                 drop.mass -= new_drop_mass
                 drop.calculate_radius()
@@ -277,7 +279,7 @@ def smooth_height_map():
 
 
 def floor_water():
-    height_map[height_map < 0.2] = 0.0
+    height_map[height_map < floor_value] = 0.0
 
 
 def detect_intersections():
@@ -295,7 +297,7 @@ def detect_intersections():
     for drop_a in temp_array:
         for drop_b in drop_array:
             if drop_a.intersects(drop_b):
-                detections.append((drop_a,drop_b))
+                detections.append((drop_a, drop_b))
 
     return detections
 
@@ -356,10 +358,8 @@ def compose_string(start_time, curr_step, drop_array, active_drops, args):
         output_string = output_string + "\nThere are currently " + str(len(drop_array) + len(active_drops)) + \
                         " drops in the height map, of which " + str(len(active_drops)) + " are in motion."
     if show_average_drop_mass:
-        masses = 0.0
-        for drop in drop_array:
-            masses += drop.mass
-        avg_mass = masses / len(drop_array)
+        masses = sum(drop.mass for drop in itertools.chain(drop_array, active_drops))
+        avg_mass = masses / (len(drop_array)+len(active_drops))
         output_string = output_string + "\nThe average mass of the drops is " + str(avg_mass) + " kg."
     return output_string
 
@@ -398,10 +398,12 @@ def initialize_globals(inject_args):
     global attraction_radius
     attraction_radius = inject_args.attraction
 
-    global time_step, t_max, beta
+    global time_step, t_max, beta, floor_value, residual_floor, residual_ceil
     time_step = inject_args.time
     t_max = time_step * 4
     beta = args.beta
+    floor_value = inject_args.floor_value
+    residual_floor, residual_ceil = inject_args.residual_floor, inject_args.residual_ceil
 
     global kernel
     if inject_args.kernel == "dwn":
@@ -422,7 +424,7 @@ def main(args, multiprocessing=False, curr_run=1):
     global height_map
 
     initialize_globals(args)
-
+    print(multiprocessing)
     if multiprocessing:
         runs = 1
     else:

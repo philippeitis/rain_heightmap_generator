@@ -4,7 +4,6 @@ if __name__ == '__main__':
     args = ap.parse_arguments()
 
     fo.set_up_directories(args)
-
     if args.runs >= 1 and args.mt:
         from src import multi_processing as mp
         args.show = False
