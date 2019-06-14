@@ -272,7 +272,7 @@ def smooth_height_map(height_map, args):
 
 
 def floor_water(height_map):
-    height_map[height_map < 0.2] = 0.0
+    height_map[height_map < 0.5] = 0.0
 
 
 def detect_intersections(active_drops, drop_array, new_drops):
@@ -325,6 +325,7 @@ def trim_drops(active_drops, args):
 
     for drop in drops_to_remove:
         drop.delete()
+
 
 def run_loop(queue, args):
     import file_ops as fo

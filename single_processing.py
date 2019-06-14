@@ -5,6 +5,25 @@ import random
 import itertools
 from scipy import ndimage
 
+# This is my lazy solution for global variables in multithreading
+args = None
+width, height = None, None
+scale_factor = None
+
+density_water = None
+gravity = None
+
+m_min, m_max, m_avg, m_dev, m_static = None, None, None, None, None
+hemispheres_enabled, max_hemispheres = None, None
+friction_constant_force = None
+attraction_radius = None
+
+beta, time_step, t_max = None, None, None
+
+active_drops, drop_array, new_drops = None, None, None
+
+height_map, kernel = None, None
+
 
 class Droplet:
     def __init__(self, x, y, mass, velocity=0):
@@ -66,7 +85,6 @@ class Droplet:
                 self.path.append((self.x, self.y))
 
             self.hemispheres = [(self.x, self.y)]
-        print(self.velocity * scale_factor * width)
 
     def intersects(self, drop):
         if drop.get_lowest_y() < self.get_highest_y() or drop.get_highest_y() > self.get_lowest_y():
@@ -196,9 +214,9 @@ def choose_direction(droplet):
 def add_drops(avg):
     for x in range(avg):
         if args.dist == "normal":
-            mass = min(m_max,max(m_min, np.random.normal(average_mass, deviation_mass, 1)))
+            mass = min(m_max, max(m_min, np.random.normal(m_avg, m_dev, 1)))
         elif args.dist == "uniform":
-            mass = np.random.uniform(m_min,m_max)
+            mass = np.random.uniform(m_min, m_max)
 
         drop_to_add = Droplet(random.randint(0, width), random.randint(0, height), mass)
         if mass > m_static:
@@ -219,7 +237,7 @@ def leave_residual_droplets():
         if drop.mass > m_static:
             if drop.residual_probability() < np.random.uniform():
                 drop.t_i = 0
-                a = np.random.uniform(0.10, 0.30)
+                a = np.random.uniform(0.10, 0.30) # Pass in as command line args
                 new_drop_mass = min(m_static, a*drop.mass)
                 drop.mass -= new_drop_mass
                 drop.calculate_radius()
@@ -327,13 +345,14 @@ def empty_new_drop_arr():
     new_drops = []
 
 
-def compose_string(start_time, drop_array, active_drops, args):
+def compose_string(start_time, curr_step, drop_array, active_drops, args):
+    import time
     verbose = args.verbose
     show_time = "t" in verbose
     show_drop_count = "d" in verbose
     show_average_drop_mass = "a" in verbose
 
-    output_string = "\rStep " + str(ii + 1) + " out of " + str(args.steps) + " is complete."
+    output_string = "\rStep " + str(curr_step + 1) + " out of " + str(args.steps) + " is complete."
 
     if show_time:
         elapsed_time = time.time() - start_time
@@ -350,56 +369,27 @@ def compose_string(start_time, drop_array, active_drops, args):
     return output_string
 
 
-if __name__ == '__main__':
-
-    import arg_parser as ap
+def main(args, multiprocessing=False, curr_run=1):
     import file_ops as fo
     import time
 
-    args = ap.parse_arguments()
+    global active_drops, drop_array, new_drops
+    global height_map
 
-    width = args.width
-    height = args.height
-    scale_factor = args.scale
+    initialize_globals(args)
 
-    density_water = args.density_water
-    gravity = args.g
-    beta = 0.5
-
-    m_min = args.m_min
-    m_max = args.m_max
-    average_mass = args.m_avg
-    deviation_mass = args.m_dev  # normally distributed
-    hemispheres_enabled = args.enable_hemispheres
-    max_hemispheres = args.max_hemispheres
-    m_static = average_mass + deviation_mass * st.norm.ppf(args.m_static)
-    friction_constant_force = m_static * gravity
-    attraction_radius = args.attraction
-
-    time_step = args.time
-    t_max = time_step * 4
-
-    temp_name = "temp"
-    temp_path = "./temp/"
-    print(args.leave_residuals)
-    fo.set_up_directories(args)
-
-    if args.kernel == "dwn":
-        kernel = np.array([[4 / 27, 1 / 9, 2 / 27],
-                           [4 / 27, 1 / 9, 2 / 27],
-                           [4 / 27, 1 / 9, 2 / 27]])
+    if multiprocessing:
+        runs = 1
     else:
-        kernel = np.array([[1 / 9, 1 / 9, 1 / 9],
-                           [1 / 9, 1 / 9, 1 / 9],
-                           [1 / 9, 1 / 9, 1 / 9]])
+        runs = args.runs
 
-    for i in range(int(args.runs)):
+    for i in range(runs):
         drop_array = []
         active_drops = []
 
         height_map = np.zeros(shape=(width, height))
 
-        for ii in range(int(args.steps)):
+        for j in range(int(args.steps)):
             new_drops = []
 
             start_time = time.time()
@@ -415,13 +405,67 @@ if __name__ == '__main__':
             compute_height_map()
             empty_new_drop_arr()
 
-            print(compose_string(start_time, drop_array, active_drops, args))
+            if not multiprocessing:
+                print(compose_string(start_time, j, drop_array, active_drops, args))
 
         new_drops = drop_array
         update_height_map()
         compute_height_map()
 
-        fo.save(fo.choose_file_name(args, i), height_map, args)
+        if multiprocessing:
+            fo.save(fo.choose_file_name(args, curr_run), height_map, args)
+            print("\rRun " + str(curr_run + 1) + " out of " + str(args.runs) + " is complete.")
+        else:
+            fo.save(fo.choose_file_name(args, i), height_map, args)
+            if runs > 1:
+                print("\rRun " + str(i + 1) + " out of " + str(i) + " is complete.")
 
-        if args.runs > 1:
-            print("\rRun " + str(i + 1) + " out of " + str(args.runs) + " is complete.")
+
+def initialize_globals(inject_args):
+    global args
+    args = inject_args
+
+    global width, height
+    global scale_factor
+    width, height = inject_args.width, inject_args.height
+    scale_factor = inject_args.scale
+
+    global density_water, gravity
+    density_water = inject_args.density_water
+    gravity = inject_args.g
+
+    global m_min, m_max, m_avg, m_dev, m_static
+    m_min = inject_args.m_min
+    m_max = inject_args.m_max
+    m_avg = inject_args.m_avg
+    m_dev = inject_args.m_dev
+
+    if args.dist == "normal":
+        m_static = m_avg + m_dev * st.norm.ppf(inject_args.m_static)
+    elif args.dist == "uniform":
+        m_static = m_max * inject_args.m_static
+
+    global friction_constant_force
+    friction_constant_force = m_static * gravity
+
+    global hemispheres_enabled, max_hemispheres
+    hemispheres_enabled = inject_args.enable_hemispheres
+    max_hemispheres = inject_args.max_hemispheres
+
+    global attraction_radius
+    attraction_radius = inject_args.attraction
+
+    global time_step, t_max, beta
+    time_step = inject_args.time
+    t_max = time_step * 4
+    beta = 0.5
+
+    global kernel
+    if inject_args.kernel == "dwn":
+        kernel = np.array([[4 / 27, 1 / 9, 2 / 27],
+                           [4 / 27, 1 / 9, 2 / 27],
+                           [4 / 27, 1 / 9, 2 / 27]])
+    else:
+        kernel = np.array([[1 / 9, 1 / 9, 1 / 9],
+                           [1 / 9, 1 / 9, 1 / 9],
+                           [1 / 9, 1 / 9, 1 / 9]])

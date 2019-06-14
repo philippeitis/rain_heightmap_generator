@@ -73,7 +73,7 @@ def parse_arguments():
 
     parser.add_argument('--runs', dest='runs', default=1, type=int,
                         help='Will execute the program with the given parameters repeatedly.')
-    parser.add_argument('--mt', dest='mt', default=1, type=int,
+    parser.add_argument('--mt', dest='mt', default="True", type=str,
                         help='Will execute the program in a multithreading capacity.')
     parser.add_argument('--verbose', dest='verbose', default="", type=str,
                         help='Will output detailed information on program operation. '
@@ -82,7 +82,7 @@ def parse_arguments():
                         'a : average mass of droplets in each step.')
 
     args = parser.parse_args()
-    boolify(args.leave_residuals, args.enable_hemispheres, args.show, args.silent)
+    boolify(args.leave_residuals, args.enable_hemispheres, args.show, args.silent, args.mt)
     return args
 
 
