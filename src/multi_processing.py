@@ -30,29 +30,10 @@ class Droplet:
 
 
 '''
-def add_drops(height_map, active_drops, drop_array, new_drops, args):
-    for x in range(args.drops):
-        mass = min(args.m_max,max(args.m_min, np.random.normal(args.m_avg, args.m_dev, 1)))
-        drop_to_add = Droplet(random.randint(0, args.width), random.randint(0, args.height), mass, 0,
-                              height_map, active_drops, drop_array, new_drops, args)
-
 def merge_drops():
-    intersecting_drops = []
-
-    for a, b in intersecting_drops:
-
-        new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
-
-        if a.y < b.y:
-            low_drop = a
-            high_drop = b
-        else:
-            low_drop = b
-            high_drop = b
-
+        ...
         low_drop.velocity = new_velocity
         low_drop.set_mass(low_drop.mass + high_drop.mass)
-        high_drop.delete()
 '''
 
 
