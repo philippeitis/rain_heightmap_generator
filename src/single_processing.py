@@ -165,6 +165,14 @@ class Droplet:
         else:
             return np.sqrt(self.radius ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
 
+    def delete(self):
+        if self in drop_array:
+            drop_array.remove(self)
+        elif self in active_drops:
+            active_drops.remove(self)
+        elif self in new_drops:
+            new_drops.remove(self)
+
 
 def choose_direction(droplet):
     # Chooses three regions in front of the drop, calculates total water volume
@@ -243,7 +251,7 @@ def leave_residual_droplets():
                 drop.calculate_radius()
 
                 if drop.mass < m_static:
-                    active_drops.remove(drop)
+                    drop.delete()
                     new_drops.append(drop)
                 new_drops.append(Droplet(drop.x, drop.y, new_drop_mass, 0))
 
@@ -254,7 +262,7 @@ def compute_height_map():
 
 
 def update_height_map():
-    for drop in itertools.chain(active_drops,new_drops):
+    for drop in itertools.chain(active_drops, new_drops):
         for y in range(drop.get_lowest_y(), drop.get_highest_y() + 1):
             for x in range(drop.get_lowest_x(), drop.get_highest_x() + 1):
                 if (0 <= y < height) and (0 <= x < width):
@@ -296,34 +304,27 @@ def merge_drops():
     intersecting_drops = detect_intersections()
 
     for a, b in intersecting_drops:
-        if a in drop_array and b in drop_array:
+        new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
 
-            new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
+        if a.y < b.y:
+            low_drop = a
+            high_drop = b
+        else:
+            low_drop = b
+            high_drop = b
 
-            if a.y < b.y:
-                low_drop = a
-                high_drop = b
-            else:
-                low_drop = b
-                high_drop = b
+        low_drop.velocity = new_velocity
+        low_drop.mass += b.mass
+        low_drop.calculate_radius()
 
-            low_drop.velocity = new_velocity
-            low_drop.mass += b.mass
-            low_drop.calculate_radius()
-            if low_drop.mass <= m_static and hemispheres_enabled:
-                low_drop.generate_hemispheres()
-                if low_drop not in new_drops:
-                    new_drops.append(low_drop)
-                    drop_array.remove(low_drop)
-            elif a.mass > m_static and a not in active_drops:
-                active_drops.append(low_drop)
+        low_drop.delete()
+        high_drop.delete()
 
-            if high_drop in drop_array:
-                drop_array.remove(high_drop)
-            elif high_drop in active_drops:
-                active_drops.remove(high_drop)
-            elif high_drop in new_drops:
-                new_drops.remove(high_drop)
+        if low_drop.mass <= m_static and hemispheres_enabled:
+            low_drop.generate_hemispheres()
+            new_drops.append(low_drop)
+        elif a.mass > m_static:
+            active_drops.append(low_drop)
 
 
 def trim_drops():
@@ -336,13 +337,7 @@ def trim_drops():
             drops_to_remove.append(drop)
 
     for drop in drops_to_remove:
-        active_drops.remove(drop)
-
-
-def empty_new_drop_arr():
-    global new_drops
-    drop_array.extend(new_drops)
-    new_drops = []
+        drop.delete()
 
 
 def compose_string(start_time, curr_step, drop_array, active_drops, args):
@@ -367,58 +362,6 @@ def compose_string(start_time, curr_step, drop_array, active_drops, args):
         avg_mass = masses / len(drop_array)
         output_string = output_string + "\nThe average mass of the drops is " + str(avg_mass) + " kg."
     return output_string
-
-
-def main(args, multiprocessing=False, curr_run=1):
-    import file_ops as fo
-    import time
-
-    global active_drops, drop_array, new_drops
-    global height_map
-
-    initialize_globals(args)
-
-    if multiprocessing:
-        runs = 1
-    else:
-        runs = args.runs
-
-    for i in range(runs):
-        drop_array = []
-        active_drops = []
-
-        height_map = np.zeros(shape=(width, height))
-
-        for j in range(int(args.steps)):
-            new_drops = []
-
-            start_time = time.time()
-
-            add_drops(int(args.drops))  # Very fast
-            iterate_over_drops()  # Very fast
-
-            if bool(args.leave_residuals):
-                leave_residual_droplets()  # Very fast
-            merge_drops()  # Takes around 1/3 of the processing time
-            trim_drops()  # Very fast
-            update_height_map()
-            compute_height_map()
-            empty_new_drop_arr()
-
-            if not multiprocessing:
-                print(compose_string(start_time, j, drop_array, active_drops, args))
-
-        new_drops = drop_array
-        update_height_map()
-        compute_height_map()
-
-        if multiprocessing:
-            fo.save(fo.choose_file_name(args, curr_run), height_map, args)
-            print("\rRun " + str(curr_run + 1) + " out of " + str(args.runs) + " is complete.")
-        else:
-            fo.save(fo.choose_file_name(args, i), height_map, args)
-            if runs > 1:
-                print("\rRun " + str(i + 1) + " out of " + str(i) + " is complete.")
 
 
 def initialize_globals(inject_args):
@@ -458,7 +401,7 @@ def initialize_globals(inject_args):
     global time_step, t_max, beta
     time_step = inject_args.time
     t_max = time_step * 4
-    beta = 0.5
+    beta = args.beta
 
     global kernel
     if inject_args.kernel == "dwn":
@@ -469,3 +412,56 @@ def initialize_globals(inject_args):
         kernel = np.array([[1 / 9, 1 / 9, 1 / 9],
                            [1 / 9, 1 / 9, 1 / 9],
                            [1 / 9, 1 / 9, 1 / 9]])
+
+
+def main(args, multiprocessing=False, curr_run=1):
+    from src import file_ops as fo
+    import time
+
+    global active_drops, drop_array, new_drops
+    global height_map
+
+    initialize_globals(args)
+
+    if multiprocessing:
+        runs = 1
+    else:
+        runs = args.runs
+
+    for i in range(runs):
+        drop_array = []
+        active_drops = []
+
+        height_map = np.zeros(shape=(width, height))
+
+        for j in range(int(args.steps)):
+            new_drops = []
+
+            start_time = time.time()
+
+            add_drops(int(args.drops))  # Very fast
+            iterate_over_drops()  # Very fast
+
+            if bool(args.leave_residuals):
+                leave_residual_droplets()  # Very fast
+            merge_drops()  # Takes around 1/3 of the processing time
+            trim_drops()  # Very fast
+            update_height_map()
+            compute_height_map()
+            drop_array.extend(new_drops)
+            new_drops = []
+
+            if not multiprocessing:
+                print(compose_string(start_time, j, drop_array, active_drops, args))
+
+        new_drops = drop_array
+        update_height_map()
+        compute_height_map()
+
+        if multiprocessing:
+            fo.save(fo.choose_file_name(args, curr_run), height_map, args)
+            print("\rRun " + str(curr_run + 1) + " out of " + str(args.runs) + " is complete.")
+        else:
+            fo.save(fo.choose_file_name(args, i), height_map, args)
+            if runs > 1:
+                print("\rRun " + str(i + 1) + " out of " + str(i) + " is complete.")
