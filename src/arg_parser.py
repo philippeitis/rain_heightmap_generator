@@ -21,7 +21,7 @@ def parse_arguments():
     parser.add_argument('--merge_radius', dest='attraction', default=2, type=int,
                         help='Drops will now merge if they are separated by less than n pixels')
 
-    parser.add_argument('--residual_drops', dest='leave_residuals', default=True, type=bool,
+    parser.add_argument('--residual_drops', dest='leave_residuals', default="True", type=str,
                         help='Enables leaving residual drops')
     parser.add_argument('--beta', dest='beta', default=0.5, type=float,
                         help='Sets value b in equation used to determine if drop should be left or not')
@@ -29,7 +29,8 @@ def parse_arguments():
                         help='Type of kernel used in smoothing step. '
                              '(dwn for downward trending, avg for averaging kernel)')
 
-    parser.add_argument('--dist', dist='dist', default="normal", choices=["normal", "uniform", ""])
+    parser.add_argument('--dist', dest='dist', default="normal", choices=["normal", "uniform"],
+                        help='Distribution used for determining drop masses.')
     parser.add_argument('--mmin', dest='m_min', default=0.000001, type=float,
                         help='Minimum mass of droplets (kg)')
     parser.add_argument('--mavg', dest='m_avg', default=0.000034, type=float,
@@ -42,7 +43,7 @@ def parse_arguments():
     parser.add_argument('--mstatic', dest='m_static', default=0.8, type=float,
                         help='Sets the percentage of drops that are static.')
 
-    parser.add_argument('--hemispheres', dest='enable_hemispheres', default=True, type=bool,
+    parser.add_argument('--hemispheres', dest='enable_hemispheres', default="True", type=str,
                         help='Enables drops with multiple hemispheres (on by default)')
     parser.add_argument('--numh', dest='max_hemispheres', default=5, type=int,
                         help='Maximum number of hemispheres per drop. '
@@ -60,8 +61,10 @@ def parse_arguments():
     parser.add_argument('--name', dest='name', type=str,
                         help='Output file name. If not defined, program defaults to using date-time string.')
 
-    parser.add_argument('--s', dest='show', default=False, type=bool,
-                        help='Show image on program completion..')
+    parser.add_argument('--s', dest='show', default="False", type=str,
+                        help='Show image on program completion.')
+    parser.add_argument('--silent', dest='silent', default="False", type=str,
+                        help='Suppress all command line printing...')
 
     parser.add_argument('--f', dest='format', default="png", type=str, choices=['png', 'txt', 'npy'],
                         help='Output file format (png, txt, or npy).')
@@ -70,7 +73,7 @@ def parse_arguments():
 
     parser.add_argument('--runs', dest='runs', default=1, type=int,
                         help='Will execute the program with the given parameters repeatedly.')
-    parser.add_argument('--mt', dest='mt', default=1, type=int,
+    parser.add_argument('--mt', dest='mt', default="True", type=str,
                         help='Will execute the program in a multithreading capacity.')
     parser.add_argument('--verbose', dest='verbose', default="", type=str,
                         help='Will output detailed information on program operation. '
@@ -78,4 +81,11 @@ def parse_arguments():
                         'd : number of droplets in each step, '
                         'a : average mass of droplets in each step.')
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    boolify(args.leave_residuals, args.enable_hemispheres, args.show, args.silent, args.mt)
+    return args
+
+
+def boolify(*argv):
+    for arg in argv:
+        arg = arg.lower in ("yes", "true", "t", "1", "enable")

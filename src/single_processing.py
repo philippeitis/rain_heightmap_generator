@@ -5,6 +5,25 @@ import random
 import itertools
 from scipy import ndimage
 
+# This is my lazy solution for global variables in multithreading
+args = None
+width, height = None, None
+scale_factor = None
+
+density_water = None
+gravity = None
+
+m_min, m_max, m_avg, m_dev, m_static = None, None, None, None, None
+hemispheres_enabled, max_hemispheres = None, None
+friction_constant_force = None
+attraction_radius = None
+
+beta, time_step, t_max = None, None, None
+
+active_drops, drop_array, new_drops = None, None, None
+
+height_map, kernel = None, None
+
 
 class Droplet:
     def __init__(self, x, y, mass, velocity=0):
@@ -14,6 +33,7 @@ class Droplet:
         self.velocity = velocity
         self.direction = 0
         self.t_i = 0
+        self.path = []
         self.hemispheres = [(self.x, self.y)]  # (x,y) tuples (could add z to represent share of mass)
         if mass < m_static and hemispheres_enabled:
             self.generate_hemispheres()
@@ -23,13 +43,14 @@ class Droplet:
 
     def calculate_radius(self):
         # Only called when mass changes to avoid excessive calculations
+        # TODO: Adjust radius calculations somehow
         self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / density_water) / scale_factor * width
 
     def generate_hemispheres(self):
         # Random walk to decide locations of hemispheres.
         self.hemispheres = [(self.x, self.y)]
         num_hemispheres = random.randint(1, max_hemispheres)
-        directions = (1,2,3,4)
+        directions = (1, 2, 3, 4)
         next_dirs = directions
         while len(self.hemispheres) < num_hemispheres:
             new_x, new_y = self.hemispheres[-1]
@@ -54,21 +75,15 @@ class Droplet:
 
     def iterate_position(self):
         if self.mass > m_static:
+            self.path = [(self.x, self.y)]
             acceleration = (self.mass * gravity - friction_constant_force)/self.mass
             self.velocity = self.velocity + acceleration * time_step
-            if self.velocity > 0:
-                self.direction = choose_direction(self)
-                if self.direction == -1:
-                    self.x -= math.floor(math.sqrt(self.velocity) * scale_factor * width) + random.randint(-2,2)
-                    self.y += math.floor(math.sqrt(self.velocity) * scale_factor * width) + random.randint(-2,2)
-                if self.direction == 0:
-                    self.y += math.floor(self.velocity * scale_factor * width) + random.randint(-2,2)
-                if self.direction == 1:
-                    self.x += math.floor(math.sqrt(self.velocity) * scale_factor * width) + random.randint(-2,2)
-                    self.y += math.floor(math.sqrt(self.velocity) * scale_factor * width) + random.randint(-2,2)
-
-                # This determines if we should leave a droplet behind
+            for i in range(math.ceil(self.velocity * scale_factor * width)):
+                self.x += choose_direction(self)
+                self.y += 1
                 self.t_i += 1
+                self.path.append((self.x, self.y))
+
             self.hemispheres = [(self.x, self.y)]
 
     def intersects(self, drop):
@@ -85,29 +100,56 @@ class Droplet:
 
     def residual_probability(self):
         if self.velocity > 0:
-            return min(1,beta * time_step / t_max * min(1, self.t_i / t_max))
+            return min(1, beta * time_step / t_max * min(1, self.t_i / t_max))
         else:
             return 0
 
     def get_lowest_y(self):
-        return min(self.hemispheres, key=lambda t: t[1])[1] - math.ceil(self.radius)
+        if self.mass < m_static or len(self.path) == 0:
+            return min(self.hemispheres, key=lambda t: t[1])[1] - math.ceil(self.radius)
+        else:
+            return min(self.path, key=lambda t: t[1])[1] - math.ceil(self.radius)
 
     def get_highest_y(self):
-        return max(self.hemispheres, key=lambda t: t[1])[1] + math.ceil(self.radius)
+        if self.mass < m_static or len(self.path) == 0:
+            return max(self.hemispheres, key=lambda t: t[1])[1] + math.ceil(self.radius)
+        else:
+            return max(self.path, key=lambda t: t[1])[1] + math.ceil(self.radius)
 
     def get_lowest_x(self):
-        return min(self.hemispheres, key=lambda t: t[0])[0] - math.ceil(self.radius)
+        if self.mass < m_static or len(self.path) == 0:
+            return min(self.hemispheres, key=lambda t: t[0])[0] - math.ceil(self.radius)
+        else:
+            return min(self.path, key=lambda t: t[0])[0] - math.ceil(self.radius)
 
     def get_highest_x(self):
-        return max(self.hemispheres, key=lambda t: t[0])[0] + math.ceil(self.radius)
+        if self.mass < m_static or len(self.path) == 0:
+            return max(self.hemispheres, key=lambda t: t[0])[0] + math.ceil(self.radius)
+        else:
+            return max(self.path, key=lambda t: t[0])[0] + math.ceil(self.radius)
 
     def get_height(self, x, y):
-        if len(self.hemispheres) == 1:
-            return np.sqrt(self.radius ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
-
-        else:
+        if len(self.path) != 0:
             summation = 0.0
+            count = 0
+            max_height = 0
+            for path_x, path_y in self.hemispheres:
+                delta_x = x - path_x
+                delta_y = y - path_y
+                rad_sqr = self.radius ** 2
+                distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
+                if rad_sqr >= distance_from_center_sqr:
+                    max_height = max(max_height, np.sqrt(rad_sqr - distance_from_center_sqr))
+                    summation += np.sqrt(rad_sqr - distance_from_center_sqr)
+                    count += 1
+            return max_height
+            if count != 0:
+                return summation / count
+            return summation
 
+        elif self.mass < m_static:
+            summation = 0.0
+            count = 0
             for hemi_x, hemi_y in self.hemispheres:
                 delta_x = x - hemi_x
                 delta_y = y - hemi_y
@@ -115,8 +157,21 @@ class Droplet:
                 distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
                 if rad_sqr >= distance_from_center_sqr:
                     summation += np.sqrt(rad_sqr - distance_from_center_sqr)
-
+                    count += 1
+            if count != 0:
+                return summation / count
             return summation
+
+        else:
+            return np.sqrt(self.radius ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
+
+    def delete(self):
+        if self in drop_array:
+            drop_array.remove(self)
+        elif self in active_drops:
+            active_drops.remove(self)
+        elif self in new_drops:
+            new_drops.remove(self)
 
 
 def choose_direction(droplet):
@@ -166,7 +221,11 @@ def choose_direction(droplet):
 # masses bounded by m_min and m_max
 def add_drops(avg):
     for x in range(avg):
-        mass = min(m_max,max(m_min, np.random.normal(average_mass, deviation_mass, 1)))
+        if args.dist == "normal":
+            mass = min(m_max, max(m_min, np.random.normal(m_avg, m_dev, 1)))
+        elif args.dist == "uniform":
+            mass = np.random.uniform(m_min, m_max)
+
         drop_to_add = Droplet(random.randint(0, width), random.randint(0, height), mass)
         if mass > m_static:
             active_drops.append(drop_to_add)
@@ -177,24 +236,7 @@ def add_drops(avg):
 # Iterates over all active drops (which are moving faster than a given speed) to update their position
 def iterate_over_drops():
     for drop in active_drops:
-        old_x = drop.x
-        old_y = drop.y
-        ## TODO: handling for fast particles (and streaks of water)
         drop.iterate_position()
-        delta_x_sqr = (old_x - drop.x) ** 2
-        delta_y_sqr = (old_y - drop.y) ** 2
-        if drop.radius**2 > delta_x_sqr + delta_y_sqr:
-            leave_streaks(old_x, old_y, drop)
-
-
-def leave_streaks(old_x, old_y, drop):
-    if old_x == drop.x:
-        for y in range(old_y,drop.y):
-            center_x = drop.x + random.randint(-2, 2)
-            for x in range(center_x - math.floor(0.8 * drop.radius), math.ceil(center_x + 0.8 * drop.radius)):
-                if (0 <= y < height) and (0 <= x < width):
-                    height_map[x, y] = max(np.sqrt(drop.radius ** 2 - (x - center_x) ** 2),height_map[x,y])
-    # Todo: add support for diagonal streaks
 
 
 # Goes over all active drops, and has them leave
@@ -203,13 +245,13 @@ def leave_residual_droplets():
         if drop.mass > m_static:
             if drop.residual_probability() < np.random.uniform():
                 drop.t_i = 0
-                a = np.random.uniform(0.10, 0.30)
+                a = np.random.uniform(0.10, 0.30) # Pass in as command line args
                 new_drop_mass = min(m_static, a*drop.mass)
                 drop.mass -= new_drop_mass
                 drop.calculate_radius()
 
                 if drop.mass < m_static:
-                    active_drops.remove(drop)
+                    drop.delete()
                     new_drops.append(drop)
                 new_drops.append(Droplet(drop.x, drop.y, new_drop_mass, 0))
 
@@ -220,7 +262,7 @@ def compute_height_map():
 
 
 def update_height_map():
-    for drop in itertools.chain(active_drops,new_drops):
+    for drop in itertools.chain(active_drops, new_drops):
         for y in range(drop.get_lowest_y(), drop.get_highest_y() + 1):
             for x in range(drop.get_lowest_x(), drop.get_highest_x() + 1):
                 if (0 <= y < height) and (0 <= x < width):
@@ -262,34 +304,27 @@ def merge_drops():
     intersecting_drops = detect_intersections()
 
     for a, b in intersecting_drops:
-        if a in drop_array and b in drop_array:
+        new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
 
-            new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
+        if a.y < b.y:
+            low_drop = a
+            high_drop = b
+        else:
+            low_drop = b
+            high_drop = b
 
-            if a.y < b.y:
-                low_drop = a
-                high_drop = b
-            else:
-                low_drop = b
-                high_drop = b
+        low_drop.velocity = new_velocity
+        low_drop.mass += b.mass
+        low_drop.calculate_radius()
 
-            low_drop.velocity = new_velocity
-            low_drop.mass += b.mass
-            low_drop.calculate_radius()
-            if low_drop.mass <= m_static and hemispheres_enabled:
-                low_drop.generate_hemispheres()
-                if low_drop not in new_drops:
-                    new_drops.append(low_drop)
-                    drop_array.remove(low_drop)
-            elif a.mass > m_static and a not in active_drops:
-                active_drops.append(low_drop)
+        low_drop.delete()
+        high_drop.delete()
 
-            if high_drop in drop_array:
-                drop_array.remove(high_drop)
-            elif high_drop in active_drops:
-                active_drops.remove(high_drop)
-            elif high_drop in new_drops:
-                new_drops.remove(high_drop)
+        if low_drop.mass <= m_static and hemispheres_enabled:
+            low_drop.generate_hemispheres()
+            new_drops.append(low_drop)
+        elif a.mass > m_static:
+            active_drops.append(low_drop)
 
 
 def trim_drops():
@@ -302,22 +337,17 @@ def trim_drops():
             drops_to_remove.append(drop)
 
     for drop in drops_to_remove:
-        active_drops.remove(drop)
+        drop.delete()
 
 
-def empty_new_drop_arr():
-    global new_drops
-    drop_array.extend(new_drops)
-    new_drops = []
-
-
-def compose_string(start_time, drop_array, active_drops, args):
+def compose_string(start_time, curr_step, drop_array, active_drops, args):
+    import time
     verbose = args.verbose
     show_time = "t" in verbose
     show_drop_count = "d" in verbose
     show_average_drop_mass = "a" in verbose
 
-    output_string = "\rStep " + str(ii + 1) + " out of " + str(args.steps) + " is complete."
+    output_string = "\rStep " + str(curr_step + 1) + " out of " + str(args.steps) + " is complete."
 
     if show_time:
         elapsed_time = time.time() - start_time
@@ -334,41 +364,47 @@ def compose_string(start_time, drop_array, active_drops, args):
     return output_string
 
 
-if __name__ == '__main__':
+def initialize_globals(inject_args):
+    global args
+    args = inject_args
 
-    import arg_parser as ap
-    import file_ops as fo
-    import time
+    global width, height
+    global scale_factor
+    width, height = inject_args.width, inject_args.height
+    scale_factor = inject_args.scale
 
-    args = ap.parse_arguments()
+    global density_water, gravity
+    density_water = inject_args.density_water
+    gravity = inject_args.g
 
-    width = args.width
-    height = args.height
-    scale_factor = args.scale
+    global m_min, m_max, m_avg, m_dev, m_static
+    m_min = inject_args.m_min
+    m_max = inject_args.m_max
+    m_avg = inject_args.m_avg
+    m_dev = inject_args.m_dev
 
-    density_water = args.density_water
-    gravity = args.g
-    beta = 0.5
+    if args.dist == "normal":
+        m_static = m_avg + m_dev * st.norm.ppf(inject_args.m_static)
+    elif args.dist == "uniform":
+        m_static = m_max * inject_args.m_static
 
-    m_min = args.m_min
-    m_max = args.m_max
-    average_mass = args.m_avg
-    deviation_mass = args.m_dev  # normally distributed
-    hemispheres_enabled = args.enable_hemispheres
-    max_hemispheres = args.max_hemispheres
-    m_static = average_mass + deviation_mass * st.norm.ppf(args.m_static)
+    global friction_constant_force
     friction_constant_force = m_static * gravity
-    attraction_radius = args.attraction
 
-    time_step = args.time
+    global hemispheres_enabled, max_hemispheres
+    hemispheres_enabled = inject_args.enable_hemispheres
+    max_hemispheres = inject_args.max_hemispheres
+
+    global attraction_radius
+    attraction_radius = inject_args.attraction
+
+    global time_step, t_max, beta
+    time_step = inject_args.time
     t_max = time_step * 4
+    beta = args.beta
 
-    temp_name = "temp"
-    temp_path = "./temp/"
-
-    fo.set_up_directories(args)
-
-    if args.kernel == "dwn":
+    global kernel
+    if inject_args.kernel == "dwn":
         kernel = np.array([[4 / 27, 1 / 9, 2 / 27],
                            [4 / 27, 1 / 9, 2 / 27],
                            [4 / 27, 1 / 9, 2 / 27]])
@@ -377,13 +413,28 @@ if __name__ == '__main__':
                            [1 / 9, 1 / 9, 1 / 9],
                            [1 / 9, 1 / 9, 1 / 9]])
 
-    for i in range(int(args.runs)):
+
+def main(args, multiprocessing=False, curr_run=1):
+    from src import file_ops as fo
+    import time
+
+    global active_drops, drop_array, new_drops
+    global height_map
+
+    initialize_globals(args)
+
+    if multiprocessing:
+        runs = 1
+    else:
+        runs = args.runs
+
+    for i in range(runs):
         drop_array = []
         active_drops = []
 
         height_map = np.zeros(shape=(width, height))
 
-        for ii in range(int(args.steps)):
+        for j in range(int(args.steps)):
             new_drops = []
 
             start_time = time.time()
@@ -397,15 +448,20 @@ if __name__ == '__main__':
             trim_drops()  # Very fast
             update_height_map()
             compute_height_map()
-            empty_new_drop_arr()
+            drop_array.extend(new_drops)
+            new_drops = []
 
-            print(compose_string(start_time, drop_array, active_drops, args))
+            if not multiprocessing:
+                print(compose_string(start_time, j, drop_array, active_drops, args))
 
         new_drops = drop_array
         update_height_map()
         compute_height_map()
 
-        fo.save(fo.choose_file_name(args, i), height_map, args)
-
-        if args.runs > 1:
-            print("\rRun " + str(i + 1) + " out of " + str(args.runs) + " is complete.")
+        if multiprocessing:
+            fo.save(fo.choose_file_name(args, curr_run), height_map, args)
+            print("\rRun " + str(curr_run + 1) + " out of " + str(args.runs) + " is complete.")
+        else:
+            fo.save(fo.choose_file_name(args, i), height_map, args)
+            if runs > 1:
+                print("\rRun " + str(i + 1) + " out of " + str(i) + " is complete.")
