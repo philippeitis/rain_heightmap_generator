@@ -33,7 +33,7 @@ collisions = ()
 
 
 class Droplet:
-    def __init__(self, x, y, mass, velocity=0):
+    def __init__(self, x, y, mass, velocity=0, parent_id = None):
         self.x = x
         self.y = y
         self.mass = mass
@@ -55,6 +55,7 @@ class Droplet:
         max_id += 1
         drop_dict[self.id] = self
 
+        self.parent_id = parent_id
         self.apply_to_id_map()
         if self.collision:
             merge_drop_passive(self, collisions)
@@ -103,8 +104,6 @@ class Droplet:
                 self.apply_last_to_id_map()
                 if self.collision:
                     merge_drop_active(self, self.collisions)
-                    if math.ceil(self.velocity * scale_factor * width) > i:
-                        break
 
             self.hemispheres = [(self.x, self.y)]
 
@@ -183,7 +182,7 @@ class Droplet:
             for y in range(self.get_lowest_y(), self.get_highest_y() + 1):
                 if (0 <= y < height) and (0 <= x < width):
                     if self.get_height(x,y) > 0:
-                        if id_map[x, y] != 0 and id_map[x, y] != self.id:
+                        if id_map[x, y] != 0 and id_map[x, y] != self.id and id_map[x, y] != self.parent_id:
                             self.collision = True
                             if not id_map[x, y] in self.collisions:
                                 self.collisions.append(id_map[x, y])
@@ -196,7 +195,7 @@ class Droplet:
             for y in range(self.get_lowest_y(), self.get_highest_y() + 1):
                 if (0 <= y < height) and (0 <= x < width):
                     if self.get_height(x,y) > 0:
-                        if id_map[x, y] != 0 and id_map[x, y] != self.id:
+                        if id_map[x, y] != 0 and id_map[x, y] != self.id and id_map[x, y] != self.parent_id:
                             self.collision = True
                             if not id_map[x, y] in self.collisions:
                                 self.collisions.append(id_map[x, y])
@@ -206,6 +205,7 @@ class Droplet:
     def delete(self):
         self.delete_arrs()
         self.set_ids(0)
+        drop_dict.pop(self.id)
 
     def delete_arrs(self):
         if self in passive_drops:
@@ -216,11 +216,7 @@ class Droplet:
             new_drops.remove(self)
 
     def set_ids(self, drop_id):
-        for x in range(self.get_lowest_x(), self.get_highest_x() + 1):
-            for y in range(self.get_lowest_y(), self.get_highest_y() + 1):
-                if (0 <= y < height) and (0 <= x < width):
-                    if id_map[x, y] == self.id:
-                        id_map[x, y] = drop_id
+        id_map[id_map == self.id] = drop_id
 
     def move_to(self,drop):
         x, y = drop.x, drop.get_lowest_y()
@@ -308,7 +304,7 @@ def leave_residual_droplets():
                 if drop.mass < m_static:
                     drop.delete()
                     new_drops.append(drop)
-                new_drops.append(Droplet(drop.x, drop.y, new_drop_mass, 0))
+                new_drops.append(Droplet(drop.x, drop.y, new_drop_mass, 0, drop.id))
 
 
 def compute_height_map():
@@ -337,7 +333,28 @@ def floor_water():
 
 
 def merge_drop_active(drop, drop_ids):
-    for drop_id in drop_ids:
+    for drop_id in set(drop_ids):
+        try:
+            b = drop_dict[drop_id]
+            new_velocity = (drop.velocity * drop.mass + b.velocity * b.mass) / (drop.mass + b.mass)
+            drop.mass += b.mass
+            drop.velocity = new_velocity
+            drop.calculate_radius()
+
+            if drop.y > b.y:
+                drop.move_to(b)
+
+            b.set_ids(drop.id)
+            b.delete()
+        except KeyError:
+            print(drop_id in id_map)
+            print("KeyError")
+
+
+
+def merge_drop_passive(drop, drop_ids):
+    drop_ids = set(drop_ids)
+    for drop_id in set(drop_ids):
         b = drop_dict[drop_id]
         new_velocity = (drop.velocity * drop.mass + b.velocity * b.mass) / (drop.mass + b.mass)
         drop.mass += b.mass
@@ -347,36 +364,30 @@ def merge_drop_active(drop, drop_ids):
         if drop.y > b.y:
             drop.move_to(b)
 
+        drop.delete_arrs()
+        b_id = b.id
         b.set_ids(drop.id)
         b.delete()
 
-
-def merge_drop_passive(drop, drop_ids):
-    for drop_id in drop_ids:
-        b = drop_dict[drop_id]
-        new_velocity = (drop.velocity * drop.mass + b.velocity * b.mass) / (drop.mass + b.mass)
-
-        if drop.y < b.y:
-            low_drop = drop
-            high_drop = b
-        else:
-            low_drop = b
-            high_drop = b
-
-        low_drop.velocity = new_velocity
-        low_drop.mass += b.mass
-        low_drop.calculate_radius()
-
-        low_drop.delete_arrs()
-        high_drop.set_ids(low_drop.id)
-        high_drop.delete()
-
-        if low_drop.mass <= m_static and hemispheres_enabled:
-            low_drop.generate_hemispheres()
-            new_drops.append(low_drop)
+        if drop.mass <= m_static and hemispheres_enabled:
+            drop.generate_hemispheres()
+            new_drops.append(drop)
         elif drop.mass > m_static:
-            low_drop.hemispheres = [(low_drop.x, low_drop.y)]
-            active_drops.append(low_drop)
+            drop.hemispheres = [(drop.x, drop.y)]
+            active_drops.append(drop)
+
+
+def trim_drops():
+    drops_to_remove = []
+    for drop in active_drops:
+        radius = drop.radius
+        x = drop.x
+        y = drop.y
+        if x + radius < 0 or x - radius > width or y + radius < 0 or y - radius > height:
+            drops_to_remove.append(drop)
+
+    for drop in drops_to_remove:
+        drop.delete()
 
 
 def compose_string(start_time, curr_step):
@@ -486,6 +497,7 @@ def main(args, multiprocessing=False, curr_run=1):
                 leave_residual_droplets()  # Very fast
             update_height_map()
             compute_height_map()
+            trim_drops()
             passive_drops.extend(new_drops)
             new_drops = []
 
@@ -500,6 +512,6 @@ def main(args, multiprocessing=False, curr_run=1):
             fo.save(fo.choose_file_name(args, curr_run), height_map, id_map, args)
             print("\rRun " + str(curr_run + 1) + " out of " + str(args.runs) + " is complete.")
         else:
-            fo.save(fo.choose_file_name(args, i), height_map, args)
+            fo.save(fo.choose_file_name(args, i), height_map, id_map, args)
             if runs > 1:
                 print("\rRun " + str(i + 1) + " out of " + str(i) + " is complete.")
