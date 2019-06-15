@@ -21,10 +21,15 @@ attraction_radius = None
 beta, time_step, t_max = None, None, None
 residual_floor, residual_ceil = None, None
 
-active_drops, drop_array, new_drops = None, None, None
+active_drops, passive_drops, new_drops = None, None, None
+drop_dict = None
 
 height_map, kernel = None, None
 floor_value = None
+
+max_id = 0
+id_map = None
+collisions = ()
 
 
 class Droplet:
@@ -36,17 +41,26 @@ class Droplet:
         self.direction = 0
         self.t_i = 0
         self.path = []
+
         self.hemispheres = [(self.x, self.y)]  # (x,y) tuples (could add z to represent share of mass)
         if mass < m_static and hemispheres_enabled:
             self.generate_hemispheres()
-
         self.radius = 0
         self.calculate_radius()
 
+        global max_id
+        self.collision = False
+        self.collisions = []
+        self.id = max_id + 1
+        max_id += 1
+        drop_dict[self.id] = self
+
+        self.apply_to_id_map()
+        if self.collision:
+            merge_drop_passive(self, collisions)
+
     def calculate_radius(self):
-        # Only called when mass changes to avoid excessive calculations
-        # TODO: Adjust radius calculations somehow
-        self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / density_water) / scale_factor * width
+        self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / density_water) * scale_factor * width
 
     def generate_hemispheres(self):
         # Random walk to decide locations of hemispheres.
@@ -80,25 +94,19 @@ class Droplet:
             self.path = [(self.x, self.y)]
             acceleration = (self.mass * gravity - friction_constant_force)/self.mass
             self.velocity = self.velocity + acceleration * time_step
+
             for i in range(math.ceil(self.velocity * scale_factor * width)):
                 self.x += choose_direction(self)
                 self.y += 1
                 self.t_i += 1
                 self.path.append((self.x, self.y))
+                self.apply_last_to_id_map()
+                if self.collision:
+                    merge_drop_active(self, self.collisions)
+                    if math.ceil(self.velocity * scale_factor * width) > i:
+                        break
 
             self.hemispheres = [(self.x, self.y)]
-
-    def intersects(self, drop):
-        if drop.get_lowest_y() < self.get_highest_y() or drop.get_highest_y() > self.get_lowest_y():
-            return False
-
-        for self_x, self_y in self.hemispheres:
-            for drop_x, drop_y in drop.hemispheres:
-                delta_x = self_x - drop_x
-                delta_y = self_y - drop_y
-                if math.sqrt(delta_x**2 + delta_y**2) < drop.radius + self.radius + attraction_radius:
-                    return True
-        return False
 
     def residual_probability(self):
         if self.velocity > 0:
@@ -165,15 +173,60 @@ class Droplet:
             return summation
 
         else:
-            return np.sqrt(self.radius ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
+            val = self.radius ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2
+            if val > 0:
+                return np.sqrt(val)
+            return 0
+
+    def apply_to_id_map(self):
+        for x in range(self.get_lowest_x(), self.get_highest_x() + 1):
+            for y in range(self.get_lowest_y(), self.get_highest_y() + 1):
+                if (0 <= y < height) and (0 <= x < width):
+                    if self.get_height(x,y) > 0:
+                        if id_map[x, y] != 0 and id_map[x, y] != self.id:
+                            self.collision = True
+                            if not id_map[x, y] in self.collisions:
+                                self.collisions.append(id_map[x, y])
+                        else:
+                            id_map[x, y] = self.id
+
+    def apply_last_to_id_map(self):
+        x, y = self.path[-1]
+        for x in range(self.get_lowest_x(), self.get_highest_x() + 1):
+            for y in range(self.get_lowest_y(), self.get_highest_y() + 1):
+                if (0 <= y < height) and (0 <= x < width):
+                    if self.get_height(x,y) > 0:
+                        if id_map[x, y] != 0 and id_map[x, y] != self.id:
+                            self.collision = True
+                            if not id_map[x, y] in self.collisions:
+                                self.collisions.append(id_map[x, y])
+                        else:
+                            id_map[x, y] = self.id
 
     def delete(self):
-        if self in drop_array:
-            drop_array.remove(self)
+        self.delete_arrs()
+        self.set_ids(0)
+
+    def delete_arrs(self):
+        if self in passive_drops:
+            passive_drops.remove(self)
         elif self in active_drops:
             active_drops.remove(self)
         elif self in new_drops:
             new_drops.remove(self)
+
+    def set_ids(self, drop_id):
+        for x in range(self.get_lowest_x(), self.get_highest_x() + 1):
+            for y in range(self.get_lowest_y(), self.get_highest_y() + 1):
+                if (0 <= y < height) and (0 <= x < width):
+                    if id_map[x, y] == self.id:
+                        id_map[x, y] = drop_id
+
+    def move_to(self,drop):
+        x, y = drop.x, drop.get_lowest_y()
+        self.x = x
+        self.y = y
+        self.path.append((x,y))
 
 
 def choose_direction(droplet):
@@ -265,8 +318,8 @@ def compute_height_map():
 
 def update_height_map():
     for drop in itertools.chain(active_drops, new_drops):
-        for y in range(drop.get_lowest_y(), drop.get_highest_y() + 1):
-            for x in range(drop.get_lowest_x(), drop.get_highest_x() + 1):
+        for x in range(drop.get_lowest_x(), drop.get_highest_x() + 1):
+            for y in range(drop.get_lowest_y(), drop.get_highest_y() + 1):
                 if (0 <= y < height) and (0 <= x < width):
                     new_height = drop.get_height(x, y)
                     if height_map[x][y] < new_height:
@@ -280,36 +333,31 @@ def smooth_height_map():
 
 def floor_water():
     height_map[height_map < floor_value] = 0.0
+    id_map[height_map == 0] = 0
 
 
-def detect_intersections():
-    detections = []
-    temp_array = []
-    temp_array.extend(active_drops)
-    temp_array.extend(new_drops)
+def merge_drop_active(drop, drop_ids):
+    for drop_id in drop_ids:
+        b = drop_dict[drop_id]
+        new_velocity = (drop.velocity * drop.mass + b.velocity * b.mass) / (drop.mass + b.mass)
+        drop.mass += b.mass
+        drop.velocity = new_velocity
+        drop.calculate_radius()
 
-    # All intersections of active and new drops with each other
-    for a in range(len(temp_array)):
-        for b in range(a+1, len(temp_array)):
-            if temp_array[a].intersects(temp_array[b]):
-                detections.append((drop_array[a], drop_array[b]))
+        if drop.y > b.y:
+            drop.move_to(b)
 
-    for drop_a in temp_array:
-        for drop_b in drop_array:
-            if drop_a.intersects(drop_b):
-                detections.append((drop_a, drop_b))
-
-    return detections
+        b.set_ids(drop.id)
+        b.delete()
 
 
-def merge_drops():
-    intersecting_drops = detect_intersections()
+def merge_drop_passive(drop, drop_ids):
+    for drop_id in drop_ids:
+        b = drop_dict[drop_id]
+        new_velocity = (drop.velocity * drop.mass + b.velocity * b.mass) / (drop.mass + b.mass)
 
-    for a, b in intersecting_drops:
-        new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
-
-        if a.y < b.y:
-            low_drop = a
+        if drop.y < b.y:
+            low_drop = drop
             high_drop = b
         else:
             low_drop = b
@@ -319,30 +367,19 @@ def merge_drops():
         low_drop.mass += b.mass
         low_drop.calculate_radius()
 
-        low_drop.delete()
+        low_drop.delete_arrs()
+        high_drop.set_ids(low_drop.id)
         high_drop.delete()
 
         if low_drop.mass <= m_static and hemispheres_enabled:
             low_drop.generate_hemispheres()
             new_drops.append(low_drop)
-        elif a.mass > m_static:
+        elif drop.mass > m_static:
+            low_drop.hemispheres = [(low_drop.x, low_drop.y)]
             active_drops.append(low_drop)
 
 
-def trim_drops():
-    drops_to_remove = []
-    for drop in active_drops:
-        radius = drop.radius
-        x = drop.x
-        y = drop.y
-        if x + radius < 0 or x - radius > width or y + radius < 0 or y - radius > height:
-            drops_to_remove.append(drop)
-
-    for drop in drops_to_remove:
-        drop.delete()
-
-
-def compose_string(start_time, curr_step, drop_array, active_drops, args):
+def compose_string(start_time, curr_step):
     import time
     verbose = args.verbose
     show_time = "t" in verbose
@@ -355,11 +392,11 @@ def compose_string(start_time, curr_step, drop_array, active_drops, args):
         elapsed_time = time.time() - start_time
         output_string = output_string + "\nCalculation took " + str(elapsed_time) + " seconds."
     if show_drop_count:
-        output_string = output_string + "\nThere are currently " + str(len(drop_array) + len(active_drops)) + \
+        output_string = output_string + "\nThere are currently " + str(len(passive_drops) + len(active_drops)) + \
                         " drops in the height map, of which " + str(len(active_drops)) + " are in motion."
     if show_average_drop_mass:
-        masses = sum(drop.mass for drop in itertools.chain(drop_array, active_drops))
-        avg_mass = masses / (len(drop_array)+len(active_drops))
+        masses = sum(drop.mass for drop in itertools.chain(passive_drops, active_drops))
+        avg_mass = masses / (len(passive_drops)+len(active_drops))
         output_string = output_string + "\nThe average mass of the drops is " + str(avg_mass) + " kg."
     return output_string
 
@@ -420,21 +457,22 @@ def main(args, multiprocessing=False, curr_run=1):
     from src import file_ops as fo
     import time
 
-    global active_drops, drop_array, new_drops
+    global active_drops, passive_drops, new_drops, id_map, drop_dict
     global height_map
 
     initialize_globals(args)
-    print(multiprocessing)
     if multiprocessing:
         runs = 1
     else:
         runs = args.runs
 
     for i in range(runs):
-        drop_array = []
+        drop_dict = {}
+        passive_drops = []
         active_drops = []
 
         height_map = np.zeros(shape=(width, height))
+        id_map = np.zeros(shape=(width, height))
 
         for j in range(int(args.steps)):
             new_drops = []
@@ -446,22 +484,20 @@ def main(args, multiprocessing=False, curr_run=1):
 
             if bool(args.leave_residuals):
                 leave_residual_droplets()  # Very fast
-            merge_drops()  # Takes around 1/3 of the processing time
-            trim_drops()  # Very fast
             update_height_map()
             compute_height_map()
-            drop_array.extend(new_drops)
+            passive_drops.extend(new_drops)
             new_drops = []
 
             if not multiprocessing:
-                print(compose_string(start_time, j, drop_array, active_drops, args))
+                print(compose_string(start_time, j))
 
-        new_drops = drop_array
+        new_drops = passive_drops
         update_height_map()
         compute_height_map()
 
         if multiprocessing:
-            fo.save(fo.choose_file_name(args, curr_run), height_map, args)
+            fo.save(fo.choose_file_name(args, curr_run), height_map, id_map, args)
             print("\rRun " + str(curr_run + 1) + " out of " + str(args.runs) + " is complete.")
         else:
             fo.save(fo.choose_file_name(args, i), height_map, args)

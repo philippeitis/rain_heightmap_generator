@@ -8,7 +8,7 @@ def parse_arguments():
                         help='Sets the width of the height map and the output file.')
     parser.add_argument('--imh', dest='height', default=480, type=int,
                         help='Sets the height of the height map and the output file.')
-    parser.add_argument('--width', dest='scale', default=0.3, type=float,
+    parser.add_argument('--scale', dest='scale', default=0.3, type=float,
                         help='Scale factor of height map')
 
     parser.add_argument('--w', dest='density_water', default=1000, type=int,
@@ -86,6 +86,9 @@ def parse_arguments():
 
     parser.add_argument('--f', dest='format', default="png", type=str, choices=['png', 'txt', 'npy'],
                         help='Output file format (png, txt, or npy).')
+    parser.add_argument('--color', dest='color', default=False, action='store_true',
+                        help='Colors in image according to drop ids.')
+
     parser.add_argument('--border', dest='border', default=0, type=int,
                         help='Sets all values within border pixels of the edge to 0')
 
