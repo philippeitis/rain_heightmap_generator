@@ -22,7 +22,7 @@ def save(file_name, height_map, id_map, args):
         maximum_drop_size = np.amax(height_map)
         im = PIL.Image.new('RGBA', (args.width, args.height), 0)
         pixels = im.load()
-        color_dict = {}
+        color_dict = {0 : (255,255,255)}
         for x in range(args.width):
             for y in range(args.height):
                 if args.color:
@@ -78,6 +78,18 @@ def choose_file_name(args, curr_run):
 
     if int(args.runs) > 1:
         name += padded_zeros(args.runs,curr_run)
+
+    return name
+
+
+def choose_file_name_per_run(args, curr_run):
+    if args.name:
+        name = args.name
+    else:
+        name = generate_time_stamp()
+
+    if int(args.runs) > 1:
+        name += padded_zeros(args.steps, curr_run)
 
     return name
 
