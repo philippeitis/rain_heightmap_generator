@@ -8,7 +8,7 @@ def parse_arguments():
                         help='Sets the width of the height map and the output file.')
     parser.add_argument('--imh', dest='height', default=480, type=int,
                         help='Sets the height of the height map and the output file.')
-    parser.add_argument('--width', dest='scale', default=0.3, type=float,
+    parser.add_argument('--scale', dest='scale', default=0.3, type=float,
                         help='Scale factor of height map')
 
     parser.add_argument('--w', dest='density_water', default=1000, type=int,
@@ -21,10 +21,21 @@ def parse_arguments():
     parser.add_argument('--merge_radius', dest='attraction', default=2, type=int,
                         help='Drops will now merge if they are separated by less than n pixels')
 
-    parser.add_argument('--residual_drops', dest='leave_residuals', default="True", type=str,
+    parser.add_argument('--enable_residuals', dest='leave_residuals', action='store_true',
                         help='Enables leaving residual drops')
+    parser.add_argument('--disable_residuals', dest='leave_residuals', action='store_false',
+                        help='Disables leaving residual drops')
+    parser.set_defaults(leave_residuals=True)
+
     parser.add_argument('--beta', dest='beta', default=0.5, type=float,
                         help='Sets value b in equation used to determine if drop should be left or not')
+    parser.add_argument('--floorval', dest='floor_value', default=0.5, type=float,
+                        help='Drops below the given height will be set to zero.')
+    parser.add_argument('--residual_floor', dest='residual_floor', default=0.1, type=float,
+                        help='Lower bound for mass drops will lose to residual drops.')
+    parser.add_argument('--residual_ceil', dest='residual_ceil', default=0.3, type=float,
+                        help='Upper bound for mass drops will lose to residual drops.')
+
     parser.add_argument('--kernel', dest='kernel', default="dwn", type=str, choices=['dwn','avg'],
                         help='Type of kernel used in smoothing step. '
                              '(dwn for downward trending, avg for averaging kernel)')
@@ -43,8 +54,12 @@ def parse_arguments():
     parser.add_argument('--mstatic', dest='m_static', default=0.8, type=float,
                         help='Sets the percentage of drops that are static.')
 
-    parser.add_argument('--hemispheres', dest='enable_hemispheres', default="True", type=str,
+    parser.add_argument('--enable_hemispheres', dest='enable_hemispheres', action='store_true',
                         help='Enables drops with multiple hemispheres (on by default)')
+    parser.add_argument('--disable_hemispheres', dest='enable_hemispheres', action='store_false',
+                        help='Disables drops with multiple hemispheres (on by default)')
+    parser.set_defaults(enable_hemispheres=True)
+
     parser.add_argument('--numh', dest='max_hemispheres', default=5, type=int,
                         help='Maximum number of hemispheres per drop. '
                              'Performance drops off rapidly after 15 hemispheres.')
@@ -61,20 +76,26 @@ def parse_arguments():
     parser.add_argument('--name', dest='name', type=str,
                         help='Output file name. If not defined, program defaults to using date-time string.')
 
-    parser.add_argument('--s', dest='show', default="False", type=str,
+    parser.add_argument('--s', dest='show', action='store_true',
                         help='Show image on program completion.')
-    parser.add_argument('--silent', dest='silent', default="False", type=str,
-                        help='Suppress all command line printing...')
+    parser.set_defaults(show=False)
+
+    parser.add_argument('--silent', dest='silent', action='store_true',
+                        help='Suppress all command line printing.')
+    parser.set_defaults(silent=False)
 
     parser.add_argument('--f', dest='format', default="png", type=str, choices=['png', 'txt', 'npy'],
                         help='Output file format (png, txt, or npy).')
+    parser.add_argument('--color', dest='color', default=False, action='store_true',
+                        help='Colors in image according to drop ids.')
+
     parser.add_argument('--border', dest='border', default=0, type=int,
                         help='Sets all values within border pixels of the edge to 0')
 
     parser.add_argument('--runs', dest='runs', default=1, type=int,
                         help='Will execute the program with the given parameters repeatedly.')
-    parser.add_argument('--mt', dest='mt', default="True", type=str,
-                        help='Will execute the program in a multithreading capacity.')
+    parser.add_argument('--mt', dest='mt', default=False, action='store_true',
+                        help='Enables multithreading for the program.')
     parser.add_argument('--verbose', dest='verbose', default="", type=str,
                         help='Will output detailed information on program operation. '
                         't : time to execute each step, '
@@ -82,10 +103,4 @@ def parse_arguments():
                         'a : average mass of droplets in each step.')
 
     args = parser.parse_args()
-    boolify(args.leave_residuals, args.enable_hemispheres, args.show, args.silent, args.mt)
     return args
-
-
-def boolify(*argv):
-    for arg in argv:
-        arg = arg.lower in ("yes", "true", "t", "1", "enable")

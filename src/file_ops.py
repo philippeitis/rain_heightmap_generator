@@ -1,5 +1,5 @@
 ## File output
-def save(file_name, height_map, args):
+def save(file_name, height_map, id_map, args):
     fformat = args.format
     file_name = args.path + file_name
 
@@ -18,13 +18,23 @@ def save(file_name, height_map, args):
 
     elif fformat == "png":
         from PIL import Image
+        import random
         maximum_drop_size = np.amax(height_map)
         im = PIL.Image.new('RGBA', (args.width, args.height), 0)
         pixels = im.load()
+        color_dict = {0 : (255,255,255)}
         for x in range(args.width):
             for y in range(args.height):
-                pixel_val = math.floor(height_map[x, y] / maximum_drop_size * 255)
-                pixels[x, y] = (pixel_val, pixel_val, pixel_val)
+                if args.color:
+                    if id_map[x, y] not in color_dict.keys():
+                        color_dict[id_map[x, y]] = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+
+                    pixel = color_dict[id_map[x, y]]
+                    height = height_map[x, y] / maximum_drop_size
+                    pixels[x, y] = tuple([math.floor(height * x) for x in pixel])
+                else:
+                    height = math.floor(height_map[x, y] / maximum_drop_size * 255)
+                    pixels[x, y] = (height, height, height)
 
         if args.show:
             im.show()
@@ -68,6 +78,18 @@ def choose_file_name(args, curr_run):
 
     if int(args.runs) > 1:
         name += padded_zeros(args.runs,curr_run)
+
+    return name
+
+
+def choose_file_name_per_run(args, curr_run):
+    if args.name:
+        name = args.name
+    else:
+        name = generate_time_stamp()
+
+    if int(args.runs) > 1:
+        name += padded_zeros(args.steps, curr_run)
 
     return name
 
