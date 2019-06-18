@@ -469,6 +469,11 @@ class Surface:
             if self.args.runs > 1:
                 print("\rRun " + str(self.curr_run + 1) + " out of " + str(self.args.runs) + " is complete.")
 
+    def add_old_drops(self):
+        self.new_drops = self.drop_array
+        self.update_height_map()
+        self.compute_height_map()
+
     def blur_masked(self):
         height_map_copy = np.array(self.height_map, copy=True)
         self.smooth_height_map()
