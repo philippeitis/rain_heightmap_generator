@@ -61,9 +61,10 @@ class Surface:
         self.avg = args.drops
         self.max_id = 0
         self.steps_so_far = 0
+        self.drop_dict = {}
 
     class Droplet:
-        def __init__(self, x, y, mass, drop_id, super, velocity=0):
+        def __init__(self, x, y, mass, drop_id, super, velocity=0, parent_id = None):
             self.x = x
             self.y = y
             self.mass = mass
@@ -78,6 +79,7 @@ class Surface:
             self.id = drop_id
             self.radius = 0
             self.calculate_radius()
+            self.parent_id = parent_id
 
         def calculate_radius(self):
             self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / self.super.density_water) * self.super.scale_factor * self.super.width
@@ -209,6 +211,9 @@ class Surface:
         elif droplet in self.new_drops:
             self.new_drops.remove(droplet)
 
+    def set_ids(self, old_id, new_id):
+        self.id_map[self.id_map == old_id] = new_id
+
     def choose_direction(self, droplet):
         # Chooses three regions in front of the drop, calculates total water volume
         # and returns region with highest water volume, or random if equal quantities of
@@ -267,12 +272,10 @@ class Surface:
             else:
                 self.new_drops.append(drop_to_add)
 
-
     # Iterates over all active drops (which are moving faster than a given speed) to update their position
     def iterate_over_drops(self):
         for drop in self.active_drops:
             drop.iterate_position()
-
 
     # Goes over all active drops, and has them leave
     def leave_residual_droplets(self):
@@ -289,7 +292,7 @@ class Surface:
                         self.delete(drop)
                         self.new_drops.append(drop)
                     self.max_id += 1
-                    self.new_drops.append(self.Droplet(drop.x, drop.y, new_drop_mass, self.max_id, self))
+                    self.new_drops.append(self.Droplet(drop.x, drop.y, new_drop_mass, self.max_id, self, parent_id=drop.id))
 
     def compute_height_map(self):
         self.smooth_height_map()
@@ -304,6 +307,19 @@ class Surface:
                         if self.height_map[x][y] < new_height:
                             self.height_map[x][y] = new_height
 
+    def update_id_map(self):
+        collisions = []
+        for drop in itertools.chain(self.active_drops, self.new_drops):
+            for y in range(drop.get_lowest_y(), drop.get_highest_y() + 1):
+                for x in range(drop.get_lowest_x(), drop.get_highest_x() + 1):
+                    if (0 <= y < self.height) and (0 <= x < self.width):
+                        if drop.get_height(x, y) > 0:
+                            curr_id = self.id_map[x, y]
+                            if curr_id != drop.parent_id and curr_id != 0:
+                                collisions.append((drop.id,curr_id))
+                            self.id_map[x,y] = drop.id
+        return collisions
+
     def smooth_height_map(self):
         self.height_map = ndimage.convolve(self.height_map, self.kernel, mode='constant', cval=0)
 
@@ -311,6 +327,7 @@ class Surface:
         self.height_map[self.height_map < self.floor_value] = 0.0
         self.id_map[self.height_map == 0] = 0
 
+    # Detects intersections in O(n^2) time by polling each drop and cross checking radius merging.
     def detect_intersections(self):
         detections = []
         temp_array = []
@@ -330,32 +347,39 @@ class Surface:
 
         return detections
 
+    # Merges and deletes drops that have merged
     def merge_drops(self):
-        intersecting_drops = self.detect_intersections()
+        intersecting_drops = self.update_id_map()
 
         for a, b in intersecting_drops:
-            new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
+            if a in self.drop_dict.keys() and b in self.drop_dict.keys():
+                a = self.drop_dict[a]
+                b = self.drop_dict[b]
+                new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
 
-            if a.y < b.y:
-                low_drop = a
-                high_drop = b
-            else:
-                low_drop = b
-                high_drop = b
+                if a.y < b.y:
+                    low_drop = a
+                    high_drop = b
+                else:
+                    low_drop = b
+                    high_drop = b
 
-            low_drop.velocity = new_velocity
-            low_drop.mass += b.mass
-            low_drop.calculate_radius()
+                low_drop.velocity = new_velocity
+                low_drop.mass += b.mass
+                low_drop.calculate_radius()
 
-            self.delete(low_drop)
-            self.delete(high_drop)
+                self.delete(low_drop)
+                self.set_ids(low_drop.id, high_drop.id)
+                self.delete(high_drop)
+                self.drop_dict.pop(high_drop)
 
-            if low_drop.mass <= self.m_static and self.hemispheres_enabled:
-                low_drop.generate_hemispheres()
-                self.new_drops.append(low_drop)
-            elif a.mass > self.m_static:
-                self.active_drops.append(low_drop)
+                if low_drop.mass <= self.m_static and self.hemispheres_enabled:
+                    low_drop.generate_hemispheres()
+                    self.new_drops.append(low_drop)
+                elif a.mass > self.m_static:
+                    self.active_drops.append(low_drop)
 
+    # Deletes drops that are out of bounds
     def trim_drops(self):
         drops_to_remove = []
         for drop in self.active_drops:
@@ -367,6 +391,9 @@ class Surface:
 
         for drop in drops_to_remove:
             self.delete(drop)
+            self.set_ids(drop.id, 0)
+            if drop.id in self.drop_dict.keys():
+                self.drop_dict.pop(drop.id)
 
     def compose_string(self):
         import time
@@ -375,7 +402,7 @@ class Surface:
         show_drop_count = "d" in verbose
         show_average_drop_mass = "a" in verbose
 
-        output_string = "\rStep " + str(self.steps_so_far + 1) + " out of " + str(self.args.steps) + " is complete."
+        output_string = "\rStep " + str(self.steps_so_far) + " out of " + str(self.args.steps) + " is complete."
 
         if show_time:
             elapsed_time = time.time() - self.start_time
@@ -415,7 +442,7 @@ class Surface:
         from src import file_ops as fo
         if self.multiprocessing:
             fo.save(fo.choose_file_name(self.args, self.curr_run), self.height_map, None, self.args)
-            print("\rRun " + str(self.curr_run + 1) + " out of " + str(self.args.runs) + " is complete.")
+            print("\rRun " + str(self.curr_run +1) + " out of " + str(self.args.runs) + " is complete.")
         else:
             fo.save(fo.choose_file_name(self.args, self.curr_run), self.height_map, None, self.args)
             if self.args.runs > 1:
