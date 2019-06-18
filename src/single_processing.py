@@ -27,6 +27,7 @@ def multi_processing(args):
 
 def single_process(args):
     from src import surface
+    from src import file_ops as fo
 
     for i in range(args.runs):
         surface = surface.Surface(args, curr_run=i)
@@ -35,10 +36,14 @@ def single_process(args):
             string = surface.step()
             if not args.silent:
                 print(string)
+            if args.video:
+                surface.save_temp()
 
         surface.blur_masked()
-
-        surface.save()
+        if not args.video:
+            surface.save()
+        else:
+            fo.save_as_video("./temp/", fo.choose_file_name(args, i))
 
 
 class Droplet:

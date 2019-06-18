@@ -62,6 +62,7 @@ class Surface:
         self.max_id = 0
         self.steps_so_far = 0
         self.drop_dict = {}
+        self.color_dict = {0 : (255, 255, 255)}
 
     class Droplet:
         def __init__(self, x, y, mass, drop_id, super, velocity=0, parent_id = None):
@@ -468,6 +469,10 @@ class Surface:
             fo.save(fo.choose_file_name(self.args, self.curr_run), self.height_map, self.id_map, self.args)
             if self.args.runs > 1:
                 print("\rRun " + str(self.curr_run + 1) + " out of " + str(self.args.runs) + " is complete.")
+
+    def save_temp(self):
+        from src import file_ops as fo
+        fo.save_temp(self.height_map, self.id_map, self.color_dict, self.args, self.steps_so_far)
 
     def add_old_drops(self):
         self.new_drops = self.drop_array

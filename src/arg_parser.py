@@ -101,6 +101,7 @@ def parse_arguments():
                         't : time to execute each step, '
                         'd : number of droplets in each step, '
                         'a : average mass of droplets in each step.')
-
+    parser.add_argument('--video', dest='video', default=False, action='store_true',
+                        help='Saves series of images as video.')
     args = parser.parse_args()
     return args
