@@ -318,6 +318,24 @@ class Surface:
         self.smooth_height_map()
         self.floor_water()
 
+    def update_maps(self):
+        collisions = []
+        for drop in itertools.chain(self.active_drops, self.new_drops):
+            for y in range(drop.get_lowest_y() - self.args.attraction, drop.get_highest_y() + self.args.attraction):
+                for x in range(drop.get_lowest_x() - self.args.attraction, drop.get_highest_x() + self.args.attraction):
+                    if (0 <= y < self.height) and (0 <= x < self.width):
+                        new_height = drop.get_height(x, y)
+                        if self.height_map[x][y] < new_height:
+                            self.height_map[x][y] = new_height
+
+                        if drop.get_id_at_pos(x, y):
+                            curr_id = self.id_map[x, y]
+                            if curr_id != drop.parent_id and curr_id != 0:
+                                collisions.append((drop.id,curr_id))
+                            self.id_map[x,y] = drop.id
+
+        return collisions
+
     def update_height_map(self):
         for drop in itertools.chain(self.active_drops, self.new_drops):
             for y in range(drop.get_lowest_y(), drop.get_highest_y() + 1):
@@ -373,6 +391,7 @@ class Surface:
     def merge_drops(self):
         intersecting_drops = self.update_id_map()
 
+
         for a, b in intersecting_drops:
             if a in self.drop_dict.keys() and b in self.drop_dict.keys():
                 a = self.drop_dict[a]
@@ -384,10 +403,10 @@ class Surface:
                     high_drop = b
                 else:
                     low_drop = b
-                    high_drop = b
+                    high_drop = a
 
                 low_drop.velocity = new_velocity
-                low_drop.mass += b.mass
+                low_drop.mass += high_drop.mass
                 low_drop.calculate_radius()
 
                 self.delete(low_drop)
@@ -440,6 +459,16 @@ class Surface:
             output_string = output_string + "\nThe average mass of the drops is " + str(avg_mass) + " kg."
         return output_string
 
+    def clear_passives(self):
+        to_pop = []
+        for drop_id in self.drop_dict.keys():
+            if drop_id not in self.id_map:
+                self.delete(self.drop_dict[drop_id])
+                to_pop.append(drop_id)
+
+        for drop_id in to_pop:
+            self.drop_dict.pop(drop_id)
+
     def step(self):
         self.new_drops = []
 
@@ -457,7 +486,8 @@ class Surface:
         self.drop_array.extend(self.new_drops)
         self.new_drops = []
         self.steps_so_far += 1
-
+        if self.steps_so_far % 25 == 0:
+            self.clear_passives()
         return self.compose_string()
 
     def save(self):

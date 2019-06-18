@@ -82,7 +82,6 @@ def save_temp(height_map, id_map, color_dict, args, curr_step):
     im.save(file_name, 'PNG')
 
 
-
 def set_up_directories(args):
     import os
     if args.path != "./":
@@ -137,7 +136,7 @@ def save_as_video(folder_name,file_name):
     frame = cv2.imread(os.path.join(folder_name, images[0]))
     height, width, layers = frame.shape
 
-    video = cv2.VideoWriter(file_name + ".avi", 0, 1, (width, height))
+    video = cv2.VideoWriter(file_name + ".avi", 0, 24, (width, height))
 
     for image in images:
         video.write(cv2.imread(os.path.join(folder_name, image)))
@@ -147,10 +146,10 @@ def save_as_video(folder_name,file_name):
     print("File saved to " + file_name + ".avi")
     clear_temp()
 
+
 def clear_temp():
     import os
-
-    filelist = [f for f in os.listdir("./temp") if f.endswith(".bak")]
+    filelist = [f for f in os.listdir("./temp") if f.endswith(".png")]
     for f in filelist:
         os.remove(os.path.join("./temp", f))
 

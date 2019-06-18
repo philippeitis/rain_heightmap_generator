@@ -6,12 +6,19 @@ if __name__ == '__main__':
 
     fo.set_up_directories(args)
 
-    if not args.name:
-        args.name = fo.generate_time_stamp()
+    if not args.profile:
+        if not args.name:
+            args.name = fo.generate_time_stamp()
 
-    if args.runs > 1 and args.mt:
-        sp.multi_processing(args)
+        if args.runs > 1 and args.mt:
+            sp.multi_processing(args)
 
+        else:
+            sp.single_process(args)
     else:
-        sp.single_process(args)
-
+        import cProfile
+        cProfile
+        cProfile.run('sp.single_process(args)',"data.txt")
+        import pstats
+        p = pstats.Stats('data.txt')
+        p.sort_stats('cumulative').print_stats(10)
