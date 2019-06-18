@@ -330,8 +330,8 @@ class Surface:
     def update_id_map(self):
         collisions = []
         for drop in itertools.chain(self.active_drops, self.new_drops):
-            for y in range(drop.get_lowest_y(), drop.get_highest_y() + 1):
-                for x in range(drop.get_lowest_x(), drop.get_highest_x() + 1):
+            for y in range(drop.get_lowest_y() - self.args.attraction, drop.get_highest_y() + self.args.attraction):
+                for x in range(drop.get_lowest_x() - self.args.attraction, drop.get_highest_x() + self.args.attraction):
                     if (0 <= y < self.height) and (0 <= x < self.width):
                         if drop.get_id_at_pos(x, y):
                             curr_id = self.id_map[x, y]
