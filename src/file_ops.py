@@ -50,7 +50,7 @@ def save(file_name, height_map, id_map, args):
 def save_temp(height_map, id_map, color_dict, args, curr_step):
     ## TODO: add functionality for saving specific args used as metadata (eg. json)
 
-    file_name = "./temp/" + str(curr_step) + ".png"
+    file_name = "./temp/" + padded_zeros(args.steps,curr_step) + ".png"
 
     import numpy as np
     import math
