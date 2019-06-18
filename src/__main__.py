@@ -1,6 +1,6 @@
 if __name__ == '__main__':
     from src import arg_parser as ap, file_ops as fo
-    from src import sim
+    from src import simulate as sim
 
     args = ap.parse_arguments()
 
