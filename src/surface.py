@@ -68,19 +68,28 @@ class Surface:
         def __init__(self, x, y, mass, drop_id, super, velocity=0, parent_id = None):
             self.x = x
             self.y = y
-            self.mass = mass
+            self.mass = 0
             self.velocity = velocity
             self.direction = 0
             self.t_i = 0
             self.path = []
             self.super = super
             self.hemispheres = [(self.x, self.y)]  # (x,y) tuples (could add z to represent share of mass)
-            if mass < super.m_static and super.hemispheres_enabled:
-                self.generate_hemispheres()
             self.id = drop_id
-            self.radius = 0
-            self.calculate_radius()
+            self.update_mass(mass)
             self.parent_id = parent_id
+
+        def update_mass(self, mass):
+            self.super.delete(self)
+            self.mass = mass
+            if mass > self.super.m_static:
+                self.hemispheres = [(self.x, self.y)]
+                self.path = []
+                self.super.active_drops.append(self)
+            else:
+                self.super.new_drops.append(self)
+                self.generate_hemispheres()
+            self.calculate_radius()
 
         def calculate_radius(self):
             self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / self.super.density_water) * self.super.scale_factor * self.super.width
@@ -286,11 +295,7 @@ class Surface:
                 mass = np.random.uniform(self.m_min, self.m_max)
 
             self.max_id += 1
-            drop_to_add = self.Droplet(random.randint(0, self.width), random.randint(0, self.height), mass, self.max_id, self)
-            if mass > self.m_static:
-                self.active_drops.append(drop_to_add)
-            else:
-                self.new_drops.append(drop_to_add)
+            self.Droplet(random.randint(0, self.width), random.randint(0, self.height), mass, self.max_id, self)
 
     # Iterates over all active drops (which are moving faster than a given speed) to update their position
     def iterate_over_drops(self):
@@ -305,14 +310,9 @@ class Surface:
                     drop.t_i = 0
                     a = np.random.uniform(self.residual_floor, self.residual_ceil) # Pass in as command line args
                     new_drop_mass = min(self.m_static, a*drop.mass)
-                    drop.mass -= new_drop_mass
-                    drop.calculate_radius()
-
-                    if drop.mass < self.m_static:
-                        self.delete(drop)
-                        self.new_drops.append(drop)
+                    drop.update_mass(drop.mass - new_drop_mass)
                     self.max_id += 1
-                    self.new_drops.append(self.Droplet(drop.x, drop.y, new_drop_mass, self.max_id, self, parent_id=drop.id))
+                    self.Droplet(drop.x, drop.y, new_drop_mass, self.max_id, self, parent_id=drop.id)
 
     def compute_height_map(self):
         self.smooth_height_map()
@@ -413,11 +413,8 @@ class Surface:
                 self.delete(high_drop)
                 self.drop_dict.pop(high_drop)
 
-                if low_drop.mass <= self.m_static and self.hemispheres_enabled:
-                    low_drop.generate_hemispheres()
-                    self.new_drops.append(low_drop)
-                elif a.mass > self.m_static:
-                    self.active_drops.append(low_drop)
+                low_drop.update_mass(low_drop.mass + high_drop.mass)
+
 
     # Deletes drops that are out of bounds
     def trim_drops(self):
