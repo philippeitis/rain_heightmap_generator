@@ -1,5 +1,7 @@
 ## File output
 def save(file_name, height_map, id_map, args):
+    ## TODO: add functionality for saving specific args used as metadata (eg. json)
+
     fformat = args.format
     file_name = args.path + file_name
 
@@ -38,9 +40,7 @@ def save(file_name, height_map, id_map, args):
 
         if args.show:
             im.show()
-
         im.save(file_name + ".png", 'PNG')
-
     elif fformat == "npy":
         np.save(file_name, height_map)
 
@@ -92,4 +92,3 @@ def choose_file_name_per_run(args, curr_run):
         name += padded_zeros(args.steps, curr_run)
 
     return name
-
