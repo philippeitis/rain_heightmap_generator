@@ -36,6 +36,8 @@ def single_process(args):
             string = surface.step()
             print(string)
 
+        surface.blur_masked()
+
         surface.save()
 
 

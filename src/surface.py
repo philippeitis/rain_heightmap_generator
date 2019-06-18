@@ -433,18 +433,26 @@ class Surface:
         self.update_height_map()
         self.compute_height_map()
         self.drop_array.extend(self.new_drops)
+        self.new_drops = []
         self.steps_so_far += 1
 
         return self.compose_string()
-        new_drops = []
 
     def save(self):
         from src import file_ops as fo
         if self.multiprocessing:
-            fo.save(fo.choose_file_name(self.args, self.curr_run), self.height_map, None, self.args)
+            fo.save(fo.choose_file_name(self.args, self.curr_run), self.height_map, self.id_map, self.args)
             print("\rRun " + str(self.curr_run +1) + " out of " + str(self.args.runs) + " is complete.")
         else:
-            fo.save(fo.choose_file_name(self.args, self.curr_run), self.height_map, None, self.args)
+            fo.save(fo.choose_file_name(self.args, self.curr_run), self.height_map, self.id_map, self.args)
             if self.args.runs > 1:
                 print("\rRun " + str(self.curr_run + 1) + " out of " + str(self.args.runs) + " is complete.")
 
+    def blur_masked(self):
+        height_map_copy = np.array(self.height_map, copy=True)
+        self.smooth_height_map()
+        self.height_map[height_map_copy == 0] = 0
+        self.smooth_height_map()
+        self.height_map[height_map_copy == 0] = 0
+        self.smooth_height_map()
+        self.height_map[height_map_copy == 0] = 0
