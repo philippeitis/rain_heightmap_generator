@@ -27,14 +27,14 @@ def multi_processing(args):
 
 def single_process(args):
     from src import surface
-    runs = args.runs
 
-    for i in range(runs):
+    for i in range(args.runs):
         surface = surface.Surface(args, curr_run=i)
 
         for j in range(int(args.steps)):
             string = surface.step()
-            print(string)
+            if not args.silent:
+                print(string)
 
         surface.blur_masked()
 

@@ -8,7 +8,7 @@ def parse_arguments():
                         help='Sets the width of the height map and the output file.')
     parser.add_argument('--imh', dest='height', default=480, type=int,
                         help='Sets the height of the height map and the output file.')
-    parser.add_argument('--scale', dest='scale', default=0.3, type=float,
+    parser.add_argument('--scale', dest='scale', default=3, type=float,
                         help='Scale factor of height map')
 
     parser.add_argument('--w', dest='density_water', default=1000, type=int,
@@ -29,7 +29,7 @@ def parse_arguments():
 
     parser.add_argument('--beta', dest='beta', default=0.5, type=float,
                         help='Sets value b in equation used to determine if drop should be left or not')
-    parser.add_argument('--floorval', dest='floor_value', default=0.5, type=float,
+    parser.add_argument('--floorval', dest='floor_value', default=1.2, type=float,
                         help='Drops below the given height will be set to zero.')
     parser.add_argument('--residual_floor', dest='residual_floor', default=0.1, type=float,
                         help='Lower bound for mass drops will lose to residual drops.')

@@ -171,16 +171,16 @@ class Surface:
                 summation = 0.0
                 count = 0
                 max_height = 0
-                for path_x, path_y in self.hemispheres:
+                for path_x, path_y in self.path:
                     delta_x = x - path_x
                     delta_y = y - path_y
                     rad_sqr = self.radius ** 2
                     distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
                     if rad_sqr >= distance_from_center_sqr:
-                        max_height = max(max_height, np.sqrt(rad_sqr - distance_from_center_sqr))
+                        #max_height = max(max_height, np.sqrt(rad_sqr - distance_from_center_sqr))
                         summation += np.sqrt(rad_sqr - distance_from_center_sqr)
                         count += 1
-                return max_height
+                #return max_height
                 if count != 0:
                     return summation / count
                 return summation
@@ -202,6 +202,25 @@ class Surface:
 
             else:
                 return np.sqrt(self.radius ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
+
+        def get_id_at_pos(self, x, y):
+            if len(self.path) != 0:
+                for path_x, path_y in self.path:
+                    delta_x = x - path_x
+                    delta_y = y - path_y
+                    rad_sqr = (self.radius + self.super.args.attraction) ** 2
+                    distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
+                    if rad_sqr >= distance_from_center_sqr:
+                        return True
+
+            elif self.mass < self.super.m_static:
+                for hemi_x, hemi_y in self.hemispheres:
+                    delta_x = x - hemi_x
+                    delta_y = y - hemi_y
+                    rad_sqr = (self.radius + self.super.args.attraction) ** 2
+                    distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
+                    if rad_sqr >= distance_from_center_sqr:
+                        return True
 
     def delete(self, droplet):
         if droplet in self.drop_array:
@@ -306,6 +325,7 @@ class Surface:
                         new_height = drop.get_height(x, y)
                         if self.height_map[x][y] < new_height:
                             self.height_map[x][y] = new_height
+            drop.path = []
 
     def update_id_map(self):
         collisions = []
@@ -313,11 +333,12 @@ class Surface:
             for y in range(drop.get_lowest_y(), drop.get_highest_y() + 1):
                 for x in range(drop.get_lowest_x(), drop.get_highest_x() + 1):
                     if (0 <= y < self.height) and (0 <= x < self.width):
-                        if drop.get_height(x, y) > 0:
+                        if drop.get_id_at_pos(x, y):
                             curr_id = self.id_map[x, y]
                             if curr_id != drop.parent_id and curr_id != 0:
                                 collisions.append((drop.id,curr_id))
                             self.id_map[x,y] = drop.id
+
         return collisions
 
     def smooth_height_map(self):
