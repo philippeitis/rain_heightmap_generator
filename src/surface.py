@@ -391,7 +391,6 @@ class Surface:
     def merge_drops(self):
         intersecting_drops = self.update_id_map()
 
-
         for a, b in intersecting_drops:
             if a in self.drop_dict.keys() and b in self.drop_dict.keys():
                 a = self.drop_dict[a]
