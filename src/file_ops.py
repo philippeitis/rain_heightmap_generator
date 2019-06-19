@@ -28,14 +28,14 @@ def save(file_name, height_map, id_map, args):
         for x in range(args.width):
             for y in range(args.height):
                 if args.color:
-                    if id_map[x, y] not in color_dict.keys():
-                        color_dict[id_map[x, y]] = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+                    if id_map[y, x] not in color_dict.keys():
+                        color_dict[id_map[y, x]] = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
 
-                    pixel = color_dict[id_map[x, y]]
-                    height = height_map[x, y] / maximum_drop_size
+                    pixel = color_dict[id_map[y, x]]
+                    height = height_map[y, x] / maximum_drop_size
                     pixels[x, y] = tuple([math.floor(height * x) for x in pixel])
                 else:
-                    height = math.floor(height_map[x, y] / maximum_drop_size * 255)
+                    height = math.floor(height_map[y,x] / maximum_drop_size * 255)
                     pixels[x, y] = (height, height, height)
 
         if args.show:

@@ -6,6 +6,7 @@ from scipy import ndimage
 import numpy as np
 import time
 
+from math import sqrt
 
 class Surface:
     def __init__(self, args, multiprocessing=False, curr_run=1):
@@ -53,8 +54,8 @@ class Surface:
         self.drop_array = []
         self.active_drops = []
         self.new_drops = []
-        self.height_map = np.zeros(shape=(self.width, self.height))
-        self.id_map = np.zeros(shape=(self.width, self.height))
+        self.height_map = np.zeros(shape=(self.height, self.width))
+        self.id_map = np.zeros(shape=(self.height, self.width))
         self.start_time = None
         self.multiprocessing = multiprocessing
         self.curr_run = curr_run
@@ -65,7 +66,7 @@ class Surface:
         self.color_dict = {0 : (255, 255, 255)}
 
     class Droplet:
-        def __init__(self, x, y, mass, drop_id, super, velocity=0, parent_id = None):
+        def __init__(self, x, y, mass, drop_id, super, velocity=0, parent_id=None):
             self.x = x
             self.y = y
             self.mass = 0
@@ -75,6 +76,10 @@ class Surface:
             self.path = []
             self.super = super
             self.hemispheres = [(self.x, self.y)]  # (x,y) tuples (could add z to represent share of mass)
+            self.radius = 0
+            self.rad_sqr = 0
+            self.rad_sqr_extended = 0
+            self.delta = 0
             self.id = drop_id
             self.update_mass(mass)
             self.parent_id = parent_id
@@ -93,6 +98,9 @@ class Surface:
 
         def calculate_radius(self):
             self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / self.super.density_water) * self.super.scale_factor * self.super.width
+            self.rad_sqr = self.radius ** 2
+            self.rad_sqr_extended = (self.radius + self.super.attraction_radius) ** 2
+            self.delta = -2 * self.super.attraction_radius - self.super.attraction_radius ** 2
 
         def generate_hemispheres(self):
             # Random walk to decide locations of hemispheres.
@@ -184,11 +192,10 @@ class Surface:
                 for path_x, path_y in self.path:
                     delta_x = x - path_x
                     delta_y = y - path_y
-                    rad_sqr = self.radius ** 2
                     distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
-                    if rad_sqr >= distance_from_center_sqr:
+                    if self.rad_sqr >= distance_from_center_sqr:
                         #max_height = max(max_height, np.sqrt(rad_sqr - distance_from_center_sqr))
-                        summation += np.sqrt(rad_sqr - distance_from_center_sqr)
+                        summation += np.sqrt(self.rad_sqr - distance_from_center_sqr)
                         count += 1
                 #return max_height
                 if count != 0:
@@ -213,6 +220,72 @@ class Surface:
             else:
                 return np.sqrt(self.radius ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
 
+        def get_height_and_id(self, x, y):
+            flag = False
+            if len(self.path) != 0:
+                distance_from_center_sqr = [(x-path_x)**2 + (y-path_y)**2 for path_x, path_y in self.path]
+                summation = 0
+                count = 0
+                for delta_distance in distance_from_center_sqr:
+                    #delta_x = x - path_x
+                    #delta_y = y - path_y
+                    #distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
+                    if not flag:
+                        if self.rad_sqr_extended >= delta_distance:
+                            flag = True
+                    if self.rad_sqr >= delta_distance:
+                        summation += sqrt(self.rad_sqr - delta_distance)
+                        count += 1
+                if count != 0:
+                    return summation / count, True
+                return 0, flag
+
+            else:
+                distance_from_center_sqr = [(x-hemi_x)**2 + (y-hemi_y)**2 for hemi_x, hemi_y in self.path]
+                summation = 0
+                count = 0
+                for delta_distance in distance_from_center_sqr:
+                    #delta_x = x - path_x
+                    #delta_y = y - path_y
+                    #distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
+                    if not flag:
+                        if self.rad_sqr_extended >= delta_distance:
+                            flag = True
+                    if self.rad_sqr >= delta_distance:
+                        summation += sqrt(self.rad_sqr - delta_distance)
+                        count += 1
+                if count != 0:
+                    return summation / count, True
+                return 0, flag
+
+            '''if len(self.path) != 0:
+                dist_from_center_sqr = [self.rad_sqr - (x - path_x) ** 2 + (y - path_y) ** 2 for path_x, path_y in self.path]
+                inside_of_extended_region = [dist for dist in dist_from_center_sqr if dist >= self.delta]
+                if len(inside_of_extended_region) > 0:
+                    below_rad_sqr = [dist for dist in inside_of_extended_region if dist >= 0]
+                    len_rad_sqr = len(below_rad_sqr)
+
+                    if len_rad_sqr != 0:
+                        return sum(np.sqrt(below_rad_sqr)) / len_rad_sqr, True
+                    else:
+                        return 0, True
+                else:
+                    return 0, False
+
+            else:
+                dist_from_center_sqr = [((x - hemi_x) ** 2 + (y - hemi_y) ** 2) for hemi_x, hemi_y in self.hemispheres]
+                inside_of_extended_region = [dist for dist in dist_from_center_sqr if dist <= self.rad_sqr_extended]
+                if len(inside_of_extended_region) > 0:
+                    below_rad_sqr = [self.rad_sqr - dist for dist in inside_of_extended_region if dist <= self.rad_sqr]
+                    len_rad_sqr = len(below_rad_sqr)
+
+                    if len_rad_sqr != 0:
+                        return sum(np.sqrt(below_rad_sqr)) / len_rad_sqr, True
+                    else:
+                        return 0, True
+                else:
+                    return 0, False'''
+
         def get_id_at_pos(self, x, y):
             if len(self.path) != 0:
                 for path_x, path_y in self.path:
@@ -233,6 +306,8 @@ class Surface:
                         return True
 
     def delete(self, droplet):
+        if not isinstance(droplet,self.Droplet):
+            raise TypeError()
         if droplet in self.drop_array:
             self.drop_array.remove(droplet)
         elif droplet in self.active_drops:
@@ -241,6 +316,8 @@ class Surface:
             self.new_drops.remove(droplet)
 
     def set_ids(self, old_id, new_id):
+        if old_id == 0:
+            raise Exception("old_id should be a non zero value")
         self.id_map[self.id_map == old_id] = new_id
 
     def choose_direction(self, droplet):
@@ -257,24 +334,24 @@ class Surface:
 
         sum1 = 0
 
-        for x in range(x_1, x_2+1):
-            for y in range(start_y, end_y+1):
+        for y in range(start_y, end_y + 1):
+            for x in range(x_1, x_2+1):
                 if 0 <= x < self.width and 0 <= y < self.height:
-                    sum1 += self.height_map[x, y]
+                    sum1 += self.height_map[y, x]
 
         sum2 = 0
 
-        for x in range(x_2, x_3+1):
-            for y in range(start_y, end_y+1):
+        for y in range(start_y, end_y + 1):
+            for x in range(x_2, x_3+1):
                 if 0 <= x < self.width and 0 <= y < self.height:
-                    sum2 += self.height_map[x, y]
+                    sum2 += self.height_map[y, x]
 
         sum3 = 0
 
-        for x in range(x_3, x_4+1):
-            for y in range(start_y, end_y+1):
+        for y in range(start_y, end_y + 1):
+            for x in range(x_3, x_4+1):
                 if 0 <= x < self.width and 0 <= y < self.height:
-                    sum3 += self.height_map[x, y]
+                    sum3 += self.height_map[y, x]
 
         if sum1 > sum2 >= sum3:
             return -1
@@ -306,7 +383,7 @@ class Surface:
     def leave_residual_droplets(self):
         for drop in self.active_drops:
             if drop.mass > self.m_static:
-                if drop.residual_probability() < np.random.uniform():
+                if drop.residual_probability() > np.random.uniform():
                     drop.t_i = 0
                     a = np.random.uniform(self.residual_floor, self.residual_ceil) # Pass in as command line args
                     new_drop_mass = min(self.m_static, a*drop.mass)
@@ -324,15 +401,15 @@ class Surface:
             for y in range(drop.get_lowest_y() - self.args.attraction, drop.get_highest_y() + self.args.attraction):
                 for x in range(drop.get_lowest_x() - self.args.attraction, drop.get_highest_x() + self.args.attraction):
                     if (0 <= y < self.height) and (0 <= x < self.width):
-                        new_height = drop.get_height(x, y)
-                        if self.height_map[x][y] < new_height:
-                            self.height_map[x][y] = new_height
+                        new_height, flag = drop.get_height_and_id(x, y)
+                        if self.height_map[y, x] < new_height:
+                            self.height_map[y, x] = new_height
 
-                        if drop.get_id_at_pos(x, y):
-                            curr_id = self.id_map[x, y]
+                        if flag:
+                            curr_id = self.id_map[y, x]
                             if curr_id != drop.parent_id and curr_id != 0:
                                 collisions.append((drop.id,curr_id))
-                            self.id_map[x,y] = drop.id
+                            self.id_map[y, x] = drop.id
 
         return collisions
 
@@ -342,8 +419,8 @@ class Surface:
                 for x in range(drop.get_lowest_x(), drop.get_highest_x() + 1):
                     if (0 <= y < self.height) and (0 <= x < self.width):
                         new_height = drop.get_height(x, y)
-                        if self.height_map[x][y] < new_height:
-                            self.height_map[x][y] = new_height
+                        if self.height_map[y, x] < new_height:
+                            self.height_map[y, x] = new_height
             drop.path = []
 
     def update_id_map(self):
@@ -353,10 +430,10 @@ class Surface:
                 for x in range(drop.get_lowest_x() - self.args.attraction, drop.get_highest_x() + self.args.attraction):
                     if (0 <= y < self.height) and (0 <= x < self.width):
                         if drop.get_id_at_pos(x, y):
-                            curr_id = self.id_map[x, y]
+                            curr_id = self.id_map[y, x]
                             if curr_id != drop.parent_id and curr_id != 0:
                                 collisions.append((drop.id,curr_id))
-                            self.id_map[x,y] = drop.id
+                            self.id_map[y, x] = drop.id
 
         return collisions
 
@@ -389,7 +466,8 @@ class Surface:
 
     # Merges and deletes drops that have merged
     def merge_drops(self):
-        intersecting_drops = self.update_id_map()
+        #intersecting_drops = self.update_id_map()
+        intersecting_drops = self.update_maps()
 
         for a, b in intersecting_drops:
             if a in self.drop_dict.keys() and b in self.drop_dict.keys():
@@ -414,7 +492,6 @@ class Surface:
                 self.drop_dict.pop(high_drop)
 
                 low_drop.update_mass(low_drop.mass + high_drop.mass)
-
 
     # Deletes drops that are out of bounds
     def trim_drops(self):
@@ -467,7 +544,6 @@ class Surface:
 
     def step(self):
         self.new_drops = []
-
         self.start_time = time.time()
 
         self.add_drops()  # Very fast
@@ -477,7 +553,7 @@ class Surface:
             self.leave_residual_droplets()  # Very fast
         self.merge_drops()  # Takes around 1/3 of the processing time
         self.trim_drops()  # Very fast
-        self.update_height_map()
+        #self.update_height_map()
         self.compute_height_map()
         self.drop_array.extend(self.new_drops)
         self.new_drops = []
