@@ -24,20 +24,21 @@ def save(file_name, height_map, id_map, args):
         maximum_drop_size = np.amax(height_map)
         im = PIL.Image.new('RGBA', (args.width, args.height), 0)
         pixels = im.load()
-        color_dict = {0 : (255,255,255)}
-        for x in range(args.width):
+        color_dict = {0:(255, 255, 255)}
+        if not args.color:
+            height_map_copy = np.floor(np.copy(height_map) * 255 / maximum_drop_size).astype(int)
             for y in range(args.height):
-                if args.color:
-                    if id_map[x, y] not in color_dict.keys():
-                        color_dict[id_map[x, y]] = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-
-                    pixel = color_dict[id_map[x, y]]
-                    height = height_map[x, y] / maximum_drop_size
-                    pixels[x, y] = tuple([math.floor(height * x) for x in pixel])
-                else:
-                    height = math.floor(height_map[x, y] / maximum_drop_size * 255)
-                    pixels[x, y] = (height, height, height)
-
+                for x in range(args.width):
+                    pixels[x, y] = (height_map_copy[x, y], height_map_copy[x, y], height_map_copy[x, y])
+        else:
+            height_map_copy = np.copy(height_map) / maximum_drop_size
+            for y in range(args.height):
+                for x in range(args.width):
+                    if args.color:
+                        if id_map[x, y] not in color_dict.keys():
+                            color_dict[id_map[x, y]] = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+                        pixel = color_dict[id_map[x, y]]
+                        pixels[x, y] = tuple([math.floor(height_map_copy[x,y] * x) for x in pixel])
         if args.show:
             im.show()
         im.save(file_name + ".png", 'PNG')
@@ -67,6 +68,7 @@ def save_temp(height_map, id_map, color_dict, args, curr_step):
     maximum_drop_size = np.amax(height_map)
     im = PIL.Image.new('RGBA', (args.width, args.height), 0)
     pixels = im.load()
+
     for x in range(args.width):
         for y in range(args.height):
             if args.color:
@@ -74,7 +76,7 @@ def save_temp(height_map, id_map, color_dict, args, curr_step):
                     color_dict[id_map[x, y]] = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
 
                 pixel = color_dict[id_map[x, y]]
-                height = height_map[x, y] / maximum_drop_size
+                height = height_map[y, x] / maximum_drop_size
                 pixels[x, y] = tuple([math.floor(height * x) for x in pixel])
             else:
                 height = math.floor(height_map[x, y] / maximum_drop_size * 255)

@@ -51,7 +51,7 @@ def parse_arguments():
                              'values create more diverse drop sizes.')
     parser.add_argument('--mmax', dest='m_max', default=0.000240, type=float,
                         help='Maximum mass of droplets (kg)')
-    parser.add_argument('--mstatic', dest='m_static', default=0.8, type=float,
+    parser.add_argument('--pstatic', dest='p_static', default=0.8, type=float,
                         help='Sets the percentage of drops that are static.')
 
     parser.add_argument('--enable_hemispheres', dest='enable_hemispheres', action='store_true',
