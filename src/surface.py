@@ -80,6 +80,10 @@ class Surface:
             self.rad_sqr = 0
             self.rad_sqr_extended = 0
             self.delta = 0
+            self.lowest_x = 0
+            self.lowest_y = 0
+            self.highest_x = 0
+            self.highest_y = 0
             self.id = drop_id
             self.update_mass(mass)
             self.parent_id = parent_id
@@ -128,8 +132,10 @@ class Surface:
                     break
                 else:
                     self.hemispheres.append((new_x, new_y))
+            self.compute_bounding_box()
 
         def iterate_position(self):
+            self.lowest_y = self.y - math.ceil(self.radius)
             if self.mass > self.super.m_static:
                 self.path = [(self.x, self.y)]
                 acceleration = (self.mass * self.super.gravity - self.super.friction_constant_force)/self.mass
@@ -141,6 +147,22 @@ class Surface:
                     self.path.append((self.x, self.y))
 
                 self.hemispheres = [(self.x, self.y)]
+                self.highest_y = self.y + math.ceil(self.radius)
+
+            self.compute_bounding_box(no_y=True)
+
+        def compute_bounding_box(self, no_y=False):
+            if self.mass < self.super.m_static or len(self.path) == 0:
+                self.lowest_y = min(self.hemispheres, key=lambda t: t[1])[1] - math.ceil(self.radius)
+                self.highest_y = max(self.hemispheres, key=lambda t: t[1])[1] + math.ceil(self.radius)
+                self.lowest_x = min(self.hemispheres, key=lambda t: t[0])[0] - math.ceil(self.radius)
+                self.highest_x = max(self.hemispheres, key=lambda t: t[0])[0] + math.ceil(self.radius)
+            else:
+                if not no_y:
+                    self.lowest_y = min(self.path, key=lambda t: t[1])[1] - math.ceil(self.radius)
+                    self.highest_y = max(self.path, key=lambda t: t[1])[1] + math.ceil(self.radius)
+                self.lowest_x = min(self.path, key=lambda t: t[0])[0] - math.ceil(self.radius)
+                self.highest_x = max(self.path, key=lambda t: t[0])[0] + math.ceil(self.radius)
 
         def intersects(self, drop):
             if drop.get_lowest_y() < self.get_highest_y() or drop.get_highest_y() > self.get_lowest_y():
@@ -159,30 +181,6 @@ class Surface:
                 return min(1, self.super.beta * self.super.time_step / self.super.t_max * min(1, self.t_i / self.super.t_max))
             else:
                 return 0
-
-        def get_lowest_y(self):
-            if self.mass < self.super.m_static or len(self.path) == 0:
-                return min(self.hemispheres, key=lambda t: t[1])[1] - math.ceil(self.radius)
-            else:
-                return min(self.path, key=lambda t: t[1])[1] - math.ceil(self.radius)
-
-        def get_highest_y(self):
-            if self.mass < self.super.m_static or len(self.path) == 0:
-                return max(self.hemispheres, key=lambda t: t[1])[1] + math.ceil(self.radius)
-            else:
-                return max(self.path, key=lambda t: t[1])[1] + math.ceil(self.radius)
-
-        def get_lowest_x(self):
-            if self.mass < self.super.m_static or len(self.path) == 0:
-                return min(self.hemispheres, key=lambda t: t[0])[0] - math.ceil(self.radius)
-            else:
-                return min(self.path, key=lambda t: t[0])[0] - math.ceil(self.radius)
-
-        def get_highest_x(self):
-            if self.mass < self.super.m_static or len(self.path) == 0:
-                return max(self.hemispheres, key=lambda t: t[0])[0] + math.ceil(self.radius)
-            else:
-                return max(self.path, key=lambda t: t[0])[0] + math.ceil(self.radius)
 
         def get_height(self, x, y):
             if len(self.path) != 0:
@@ -221,43 +219,45 @@ class Surface:
                 return np.sqrt(self.radius ** 2 - (y - self.y) ** 2 - (x - self.x) ** 2)
 
         def get_height_and_id(self, x, y):
-            flag = False
-            if len(self.path) != 0:
-                distance_from_center_sqr = [(x-path_x)**2 + (y-path_y)**2 for path_x, path_y in self.path]
-                summation = 0
-                count = 0
-                for delta_distance in distance_from_center_sqr:
-                    #delta_x = x - path_x
-                    #delta_y = y - path_y
-                    #distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
-                    if not flag:
-                        if self.rad_sqr_extended >= delta_distance:
-                            flag = True
-                    if self.rad_sqr >= delta_distance:
-                        summation += sqrt(self.rad_sqr - delta_distance)
-                        count += 1
-                if count != 0:
-                    return summation / count, True
-                return 0, flag
+            if self.lowest_x <= x <= self.highest_x and self.lowest_y <= y <= self.highest_y:
+                flag = False
+                if len(self.path) != 0:
+                    distance_from_center_sqr = [(x-path_x)**2 + (y-path_y)**2 for path_x, path_y in self.path]
+                    summation = 0
+                    count = 0
+                    for delta_distance in distance_from_center_sqr:
+                        #delta_x = x - path_x
+                        #delta_y = y - path_y
+                        #distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
+                        if not flag:
+                            if self.rad_sqr_extended >= delta_distance:
+                                flag = True
+                        if self.rad_sqr >= delta_distance:
+                            summation += sqrt(self.rad_sqr - delta_distance)
+                            count += 1
+                    if count != 0:
+                        return summation / count, True
+                    return 0, flag
 
+                else: # <- Never gets touched
+                    distance_from_center_sqr = [(x-hemi_x)**2 + (y-hemi_y)**2 for hemi_x, hemi_y in self.path]
+                    summation = 0
+                    count = 0
+                    for delta_distance in distance_from_center_sqr:
+                        #delta_x = x - path_x
+                        #delta_y = y - path_y
+                        #distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
+                        if not flag:
+                            if self.rad_sqr_extended >= delta_distance:
+                                flag = True
+                        if self.rad_sqr >= delta_distance:
+                            summation += sqrt(self.rad_sqr - delta_distance)
+                            count += 1
+                    if count != 0:
+                        return summation / count, True
+                    return 0, flag
             else:
-                distance_from_center_sqr = [(x-hemi_x)**2 + (y-hemi_y)**2 for hemi_x, hemi_y in self.path]
-                summation = 0
-                count = 0
-                for delta_distance in distance_from_center_sqr:
-                    #delta_x = x - path_x
-                    #delta_y = y - path_y
-                    #distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
-                    if not flag:
-                        if self.rad_sqr_extended >= delta_distance:
-                            flag = True
-                    if self.rad_sqr >= delta_distance:
-                        summation += sqrt(self.rad_sqr - delta_distance)
-                        count += 1
-                if count != 0:
-                    return summation / count, True
-                return 0, flag
-
+                return 0, self.get_id_at_pos(x,y)
             '''if len(self.path) != 0:
                 dist_from_center_sqr = [self.rad_sqr - (x - path_x) ** 2 + (y - path_y) ** 2 for path_x, path_y in self.path]
                 inside_of_extended_region = [dist for dist in dist_from_center_sqr if dist >= self.delta]
@@ -287,23 +287,28 @@ class Surface:
                     return 0, False'''
 
         def get_id_at_pos(self, x, y):
-            if len(self.path) != 0:
+            '''if len(self.path) != 0:
                 for path_x, path_y in self.path:
                     delta_x = x - path_x
                     delta_y = y - path_y
-                    rad_sqr = (self.radius + self.super.args.attraction) ** 2
                     distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
-                    if rad_sqr >= distance_from_center_sqr:
+                    if self.rad_sqr_extended >= distance_from_center_sqr:
                         return True
 
             elif self.mass < self.super.m_static:
                 for hemi_x, hemi_y in self.hemispheres:
                     delta_x = x - hemi_x
                     delta_y = y - hemi_y
-                    rad_sqr = (self.radius + self.super.args.attraction) ** 2
                     distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
-                    if rad_sqr >= distance_from_center_sqr:
+                    if self.rad_sqr_extended >= distance_from_center_sqr:
                         return True
+            return False'''
+
+            if len(self.path) != 0:
+                return any((x - path_x) ** 2 + (y - path_y) ** 2 < self.rad_sqr_extended for path_x, path_y in self.path)
+
+            else:
+                return any((x - hemi_x) ** 2 + (y - hemi_y) ** 2 < self.rad_sqr_extended for hemi_x, hemi_y in self.hemispheres)
 
     def delete(self, droplet):
         if not isinstance(droplet,self.Droplet):
@@ -398,8 +403,8 @@ class Surface:
     def update_maps(self):
         collisions = []
         for drop in itertools.chain(self.active_drops, self.new_drops):
-            for y in range(drop.get_lowest_y() - self.args.attraction, drop.get_highest_y() + self.args.attraction):
-                for x in range(drop.get_lowest_x() - self.args.attraction, drop.get_highest_x() + self.args.attraction):
+            for y in range(drop.lowest_y - self.args.attraction, drop.highest_y + self.args.attraction):
+                for x in range(drop.lowest_x - self.args.attraction, drop.highest_x + self.args.attraction):
                     if (0 <= y < self.height) and (0 <= x < self.width):
                         new_height, flag = drop.get_height_and_id(x, y)
                         if self.height_map[y, x] < new_height:
@@ -415,8 +420,8 @@ class Surface:
 
     def update_height_map(self):
         for drop in itertools.chain(self.active_drops, self.new_drops):
-            for y in range(drop.get_lowest_y(), drop.get_highest_y() + 1):
-                for x in range(drop.get_lowest_x(), drop.get_highest_x() + 1):
+            for y in range(drop.lowest_y, drop.highest_y):
+                for x in range(drop.lowest_x, drop.highest_x):
                     if (0 <= y < self.height) and (0 <= x < self.width):
                         new_height = drop.get_height(x, y)
                         if self.height_map[y, x] < new_height:
@@ -426,8 +431,8 @@ class Surface:
     def update_id_map(self):
         collisions = []
         for drop in itertools.chain(self.active_drops, self.new_drops):
-            for y in range(drop.get_lowest_y() - self.args.attraction, drop.get_highest_y() + self.args.attraction):
-                for x in range(drop.get_lowest_x() - self.args.attraction, drop.get_highest_x() + self.args.attraction):
+            for y in range(drop.lowest_y - self.args.attraction, drop.highest_y + self.args.attraction):
+                for x in range(drop.lowest_x - self.args.attraction, drop.highest_x + self.args.attraction):
                     if (0 <= y < self.height) and (0 <= x < self.width):
                         if drop.get_id_at_pos(x, y):
                             curr_id = self.id_map[y, x]

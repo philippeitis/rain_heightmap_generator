@@ -24,7 +24,7 @@ def save(file_name, height_map, id_map, args):
         maximum_drop_size = np.amax(height_map)
         im = PIL.Image.new('RGBA', (args.width, args.height), 0)
         pixels = im.load()
-        color_dict = {0 : (255,255,255)}
+        color_dict = {0:(255, 255, 255)}
         for x in range(args.width):
             for y in range(args.height):
                 if args.color:
