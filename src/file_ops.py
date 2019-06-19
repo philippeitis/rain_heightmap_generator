@@ -15,10 +15,11 @@ def save(file_name, height_map, id_map, args):
     height_map[:, 0:border] = 0
     height_map[:, args.height - border:] = 0
 
-    if fformat == "txt":
+    if "txt" in fformat:
         np.savetxt(file_name + ".txt", height_map, delimiter=",")
+        print("File saved to " + file_name + ".txt")
 
-    elif fformat == "png":
+    if "png" in fformat:
         from PIL import Image
         import random
         maximum_drop_size = np.amax(height_map)
@@ -42,10 +43,12 @@ def save(file_name, height_map, id_map, args):
         if args.show:
             im.show()
         im.save(file_name + ".png", 'PNG')
-    elif fformat == "npy":
+        print("File saved to " + file_name + ".png")
+
+    if "npy" in fformat:
         np.save(file_name, height_map)
 
-    print("File saved to " + file_name + "." + fformat)
+        print("File saved to " + file_name + ".npy")
 
 
 def save_temp(height_map, id_map, color_dict, args, curr_step):

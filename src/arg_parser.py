@@ -84,8 +84,9 @@ def parse_arguments():
                         help='Suppress all command line printing.')
     parser.set_defaults(silent=False)
 
-    parser.add_argument('--f', dest='format', default="png", type=str, choices=['png', 'txt', 'npy'],
+    parser.add_argument('--f', dest='format', default="png", nargs='+', type=str, choices=['png', 'txt', 'npy'],
                         help='Output file format (png, txt, or npy).')
+
     parser.add_argument('--color', dest='color', default=False, action='store_true',
                         help='Colors in image according to drop ids.')
 

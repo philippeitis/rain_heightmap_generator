@@ -240,7 +240,6 @@ class Surface:
                     #filtered_dist = [dist for dist in distance_from_center_sqr if dist > self.delta]
                     summation = 0
                     count = 0
-                    #flag = any(distance_from_center_sqr >= self.rad_sqr_extended)
                     for delta_distance in distance_from_center_sqr:
                         if not flag:
                             if self.rad_sqr_extended >= delta_distance:
@@ -248,7 +247,7 @@ class Surface:
                         if self.rad_sqr >= delta_distance:
                             summation += sqrt(self.rad_sqr - delta_distance)
                             count += 1
-                    if len(distance_from_center_sqr) > 0:
+                    if count > 0:
                         return summation / count, True
                     return 0, flag
 
@@ -268,34 +267,6 @@ class Surface:
                     return 0, flag
             else:
                 return 0, self.get_id_at_pos(x,y)
-
-            '''if len(self.path) != 0:
-                dist_from_center_sqr = [self.rad_sqr - (x - path_x) ** 2 + (y - path_y) ** 2 for path_x, path_y in self.path]
-                inside_of_extended_region = [dist for dist in dist_from_center_sqr if dist >= self.delta]
-                if len(inside_of_extended_region) > 0:
-                    below_rad_sqr = [dist for dist in inside_of_extended_region if dist >= 0]
-                    len_rad_sqr = len(below_rad_sqr)
-
-                    if len_rad_sqr != 0:
-                        return sum(np.sqrt(below_rad_sqr)) / len_rad_sqr, True
-                    else:
-                        return 0, True
-                else:
-                    return 0, False
-
-            else:
-                dist_from_center_sqr = [((x - hemi_x) ** 2 + (y - hemi_y) ** 2) for hemi_x, hemi_y in self.hemispheres]
-                inside_of_extended_region = [dist for dist in dist_from_center_sqr if dist <= self.rad_sqr_extended]
-                if len(inside_of_extended_region) > 0:
-                    below_rad_sqr = [self.rad_sqr - dist for dist in inside_of_extended_region if dist <= self.rad_sqr]
-                    len_rad_sqr = len(below_rad_sqr)
-
-                    if len_rad_sqr != 0:
-                        return sum(np.sqrt(below_rad_sqr)) / len_rad_sqr, True
-                    else:
-                        return 0, True
-                else:
-                    return 0, False'''
 
         def get_id_at_pos(self, x, y):
             if len(self.path) != 0:
@@ -354,7 +325,7 @@ class Surface:
             if sum3 > sum1 >= sum2 or sum3 > sum2 >= sum1:
                 return 1
             else:
-                return random.randint(-1,1)
+                return random.randint(-1, 1)
 
     # Adds avg drops, placed randomly on the height map, with randomly generated
     # masses bounded by m_min and m_max
