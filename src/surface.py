@@ -184,6 +184,35 @@ class Surface:
             else:
                 return 0
 
+        def get_height_arr(self):
+            internal_height_map = np.zeros(shape=(self.highest_x-self.lowest_x, self.highest_y-self.lowest_y))
+            internal_height_map_counts = np.zeros(shape=(self.highest_x-self.lowest_x, self.highest_y-self.lowest_y))
+
+            if len(self.path) != 0:
+                for x, y in self.path:
+                    dists_from_center_sqr = np.array([[self.rad_sqr - (x-new_x)**2 + (y-new_y)**2
+                                                      for new_y in range(self.lowest_x,self.highest_x)]
+                                                     for new_x in range(self.lowest_y,self.highest_y)])\
+                        .reshape((self.highest_x-self.lowest_x, self.highest_y-self.lowest_y))
+
+                    dists_from_center_sqr[dists_from_center_sqr < 0] = 0
+                    internal_height_map = np.add(internal_height_map, np.sqrt(dists_from_center_sqr))
+                    internal_height_map_counts[dists_from_center_sqr > 0] += 1
+                internal_height_map_counts[dists_from_center_sqr == 0] = 1
+                return np.divide(internal_height_map,internal_height_map_counts)
+
+            else:
+                for x, y in self.hemispheres:
+                    dists_from_center_sqr = np.array([[self.rad_sqr - (x-new_x)**2 + (y-new_y)**2
+                                                      for new_y in range(self.lowest_x,self.highest_x)]
+                                                     for new_x in range(self.lowest_y,self.highest_y)])
+                    print(np.shape(dists_from_center_sqr))
+                    dists_from_center_sqr[dists_from_center_sqr < 0] = 0
+                    np.add(internal_height_map, np.sqrt(dists_from_center_sqr))
+                    internal_height_map_counts[dists_from_center_sqr > 0] += 1
+                internal_height_map_counts[dists_from_center_sqr == 0] = 1
+                return np.divide(internal_height_map,internal_height_map_counts)
+
         def get_height(self, x, y):
             if len(self.path) != 0:
                 distance_from_center_sqr = [self.rad_sqr - (x - path_x) ** 2 + (y - path_y) ** 2 for path_x, path_y in self.path]
@@ -193,21 +222,6 @@ class Surface:
                     return sum(distance_from_center_sqr_pos) / length
                 else:
                     return 0
-                '''summation = 0.0
-                count = 0
-                max_height = 0
-                for path_x, path_y in self.path:
-                    delta_x = x - path_x
-                    delta_y = y - path_y
-                    distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
-                    if self.rad_sqr >= distance_from_center_sqr:
-                        #max_height = max(max_height, np.sqrt(rad_sqr - distance_from_center_sqr))
-                        summation += np.sqrt(self.rad_sqr - distance_from_center_sqr)
-                        count += 1
-                #return max_height
-                if count != 0:
-                    return summation / count
-                return summation'''
 
             else:
                 distance_from_center_sqr = [self.rad_sqr - (x - hemi_x) ** 2 + (y - hemi_y) ** 2 for hemi_x, hemi_y in self.hemispheres]
@@ -216,27 +230,17 @@ class Surface:
                 if length > 0:
                     return sum(distance_from_center_sqr_pos) / length
 
-                '''summation = 0.0
-                count = 0
-                for hemi_x, hemi_y in self.hemispheres:
-                    delta_x = x - hemi_x
-                    delta_y = y - hemi_y
-                    rad_sqr = self.radius ** 2
-                    distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
-                    if rad_sqr >= distance_from_center_sqr:
-                        summation += np.sqrt(rad_sqr - distance_from_center_sqr)
-                        count += 1
-                if count != 0:
-                    return summation / count
-                return summation'''
-
-        def get_height_and_id(self, x, y):
+        def get_height_and_id(self, x, y): # <- This guy sucks down all the processing time.
             if self.lowest_x <= x <= self.highest_x and self.lowest_y <= y <= self.highest_y:
                 flag = False
                 if len(self.path) != 0:
-                    distance_from_center_sqr = [(x-path_x)**2 + (y-path_y)**2 for path_x, path_y in self.path]
+                    ## EVIL EVIL PERFORMANCE HOG
+                    distance_from_center_sqr = [(x-path_x)*(x-path_x) + (y-path_y)*(y-path_y) for path_x, path_y in
+                                                self.path if y - self.radius <= path_y <= y + self.radius]
+                    #filtered_dist = [dist for dist in distance_from_center_sqr if dist > self.delta]
                     summation = 0
                     count = 0
+                    #flag = any(distance_from_center_sqr >= self.rad_sqr_extended)
                     for delta_distance in distance_from_center_sqr:
                         if not flag:
                             if self.rad_sqr_extended >= delta_distance:
@@ -244,7 +248,7 @@ class Surface:
                         if self.rad_sqr >= delta_distance:
                             summation += sqrt(self.rad_sqr - delta_distance)
                             count += 1
-                    if count != 0:
+                    if len(distance_from_center_sqr) > 0:
                         return summation / count, True
                     return 0, flag
 
@@ -294,28 +298,12 @@ class Surface:
                     return 0, False'''
 
         def get_id_at_pos(self, x, y):
-            '''if len(self.path) != 0:
-                for path_x, path_y in self.path:
-                    delta_x = x - path_x
-                    delta_y = y - path_y
-                    distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
-                    if self.rad_sqr_extended >= distance_from_center_sqr:
-                        return True
-
-            elif self.mass < self.super.m_static:
-                for hemi_x, hemi_y in self.hemispheres:
-                    delta_x = x - hemi_x
-                    delta_y = y - hemi_y
-                    distance_from_center_sqr = delta_x ** 2 + delta_y ** 2
-                    if self.rad_sqr_extended >= distance_from_center_sqr:
-                        return True
-            return False'''
-
             if len(self.path) != 0:
-                return any((x - path_x) ** 2 + (y - path_y) ** 2 < self.rad_sqr_extended for path_x, path_y in self.path)
-
+                return any((x - path_x) * (x - path_x) + (y - path_y) * (y - path_y) < self.rad_sqr_extended
+                           for path_x, path_y in self.path)
             else:
-                return any((x - hemi_x) ** 2 + (y - hemi_y) ** 2 < self.rad_sqr_extended for hemi_x, hemi_y in self.hemispheres)
+                return any((x - hemi_x) * (x - hemi_x) + (y - hemi_y) * (y - hemi_y) < self.rad_sqr_extended
+                           for hemi_x, hemi_y in self.hemispheres)
 
     def delete(self, droplet):
         if not isinstance(droplet,self.Droplet):
@@ -344,25 +332,9 @@ class Surface:
         x_3 = droplet.x + radius
         x_4 = droplet.x + 3 * radius
 
-        sum1 = 0
-        for y in range(start_y, end_y + 1):
-            for x in range(x_1, x_2+1):
-                if 0 <= x < self.width and 0 <= y < self.height:
-                    sum1 += self.height_map[x, y]
-
-        sum2 = 0
-
-        for y in range(start_y, end_y + 1):
-            for x in range(x_2, x_3+1):
-                if 0 <= x < self.width and 0 <= y < self.height:
-                    sum2 += self.height_map[x, y]
-
-        sum3 = 0
-
-        for y in range(start_y, end_y + 1):
-            for x in range(x_3, x_4+1):
-                if 0 <= x < self.width and 0 <= y < self.height:
-                    sum3 += self.height_map[x, y]
+        sum1 = np.sum(self.height_map[x_1:x_2+1, start_y:end_y + 1])
+        sum2 = np.sum(self.height_map[x_2:x_3+1, start_y:end_y + 1])
+        sum3 = np.sum(self.height_map[x_3:x_4 + 1, start_y:end_y + 1])
 
         if sum1 > sum2 >= sum3:
             return -1
@@ -371,25 +343,10 @@ class Surface:
         if sum3 > sum1 >= sum2:
             return 1
         else:
-            sum1 = 0
-            for y in range(start_y, end_y + 1):
-                for x in range(x_1, x_2 + 1):
-                    if 0 <= x < self.width and 0 <= y < self.height:
-                        sum1 += self.affinity_map[x, y]
+            sum1 = np.sum(self.affinity_map[x_1:x_2 + 1, start_y:end_y + 1])
+            sum2 = np.sum(self.affinity_map[x_2:x_3 + 1, start_y:end_y + 1])
+            sum3 = np.sum(self.affinity_map[x_3:x_4 + 1, start_y:end_y + 1])
 
-            sum2 = 0
-
-            for y in range(start_y, end_y + 1):
-                for x in range(x_2, x_3 + 1):
-                    if 0 <= x < self.width and 0 <= y < self.height:
-                        sum2 += self.affinity_map[x, y]
-
-            sum3 = 0
-
-            for y in range(start_y, end_y + 1):
-                for x in range(x_3, x_4 + 1):
-                    if 0 <= x < self.width and 0 <= y < self.height:
-                        sum3 += self.affinity_map[x, y]
             if sum1 > sum2 >= sum3 or sum1 > sum3 >= sum2:
                 return -1
             if sum2 > sum1 >= sum3 or sum2 > sum3 >= sum1:
@@ -458,6 +415,11 @@ class Surface:
                         if self.height_map[x, y] < new_height:
                             self.height_map[x, y] = new_height
             drop.path = []
+
+    def update_height_map_arrs(self):
+        for drop in itertools.chain(self.active_drops, self.new_drops):
+            self.height_map[drop.lowest_x:drop.highest_x, drop.lowest_y:drop.highest_y] = np.maximum(
+                self.height_map[drop.lowest_x:drop.highest_x, drop.lowest_y:drop.highest_y], drop.get_height_arr())
 
     def update_id_map(self):
         collisions = []
@@ -589,7 +551,7 @@ class Surface:
             self.leave_residual_droplets()  # Very fast
         self.merge_drops()  # Takes around 1/3 of the processing time
         self.trim_drops()  # Very fast
-        #self.update_height_map()
+        #self.update_height_map_arrs()
         self.compute_height_map()
         self.drop_array.extend(self.new_drops)
         self.new_drops = []
