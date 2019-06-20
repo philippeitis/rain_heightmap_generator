@@ -87,6 +87,7 @@ class Surface:
             self.highest_x = 0
             self.highest_y = 0
             self.id = drop_id
+            self.super.drop_dict[drop_id] = self
             self.update_mass(mass)
             self.parent_id = parent_id
 
@@ -277,7 +278,7 @@ class Surface:
                            for hemi_x, hemi_y in self.hemispheres)
 
     def delete(self, droplet):
-        if not isinstance(droplet,self.Droplet):
+        if not isinstance(droplet, self.Droplet):
             raise TypeError()
         if droplet in self.drop_array:
             self.drop_array.remove(droplet)
@@ -325,7 +326,7 @@ class Surface:
             if sum3 > sum1 >= sum2 or sum3 > sum2 >= sum1:
                 return 1
             else:
-                return random.randint(-1, 1)
+                return 0
 
     # Adds avg drops, placed randomly on the height map, with randomly generated
     # masses bounded by m_min and m_max
@@ -452,15 +453,12 @@ class Surface:
                     high_drop = a
 
                 low_drop.velocity = new_velocity
-                low_drop.mass += high_drop.mass
+                low_drop.update_mass(low_drop.mass + high_drop.mass)
                 low_drop.calculate_radius()
 
-                self.delete(low_drop)
                 self.set_ids(low_drop.id, high_drop.id)
                 self.delete(high_drop)
-                self.drop_dict.pop(high_drop)
-
-                low_drop.update_mass(low_drop.mass + high_drop.mass)
+                self.drop_dict.pop(high_drop.id)
 
     # Deletes drops that are out of bounds
     def trim_drops(self):
@@ -475,8 +473,7 @@ class Surface:
         for drop in drops_to_remove:
             self.delete(drop)
             self.set_ids(drop.id, 0)
-            if drop.id in self.drop_dict.keys():
-                self.drop_dict.pop(drop.id)
+            self.drop_dict.pop(drop.id)
 
     def compose_string(self):
         import time
@@ -504,9 +501,10 @@ class Surface:
     def clear_passives(self):
         to_pop = []
         for drop_id in self.drop_dict.keys():
-            if drop_id not in self.id_map:
-                self.delete(self.drop_dict[drop_id])
-                to_pop.append(drop_id)
+            if self.drop_dict[drop_id] in self.drop_array:
+                if drop_id not in self.id_map:
+                    self.delete(self.drop_dict[drop_id])
+                    to_pop.append(drop_id)
 
         for drop_id in to_pop:
             self.drop_dict.pop(drop_id)
@@ -527,8 +525,8 @@ class Surface:
         self.drop_array.extend(self.new_drops)
         self.new_drops = []
         self.steps_so_far += 1
-        if self.steps_so_far % 25 == 0:
-            self.clear_passives()
+
+        self.clear_passives()
         return self.compose_string()
 
     def save(self):

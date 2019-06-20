@@ -28,7 +28,7 @@ def multi_processing(args):
 def single_process(args):
     from src import surface
     from src import file_ops as fo
-
+    import math
     for i in range(args.runs):
         surface = surface.Surface(args, curr_run=i)
 
@@ -39,7 +39,8 @@ def single_process(args):
             if args.video:
                 surface.save_temp()
 
-        surface.blur_masked()
+        for i in range(math.ceil(args.width / 720)):
+            surface.blur_masked()
         if not args.video:
             surface.save()
         else:
