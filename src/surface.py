@@ -52,8 +52,9 @@ class Surface:
                                [1 / 9, 1 / 9, 1 / 9],
                                [1 / 9, 1 / 9, 1 / 9]])
 
-        self.drop_array = []
+        self.passive_drops = []
         self.active_drops = []
+        self.residual_drops = []
         self.new_drops = []
         self.height_map = np.zeros(shape=(self.width, self.height))
         self.id_map = np.zeros(shape=(self.width, self.height))
@@ -64,8 +65,11 @@ class Surface:
         self.max_id = 0
         self.steps_so_far = 0
         self.drop_dict = {}
+        self.trail_map = np.zeros(shape=(self.width, self.height), dtype=bool)
         self.color_dict = {0: (255, 255, 255)}
         self.affinity_map = np.reshape(np.random.uniform(size=self.width*self.height), (self.width,self.height))
+        self.static_drop_map = np.zeros(shape=(self.width, self.height))
+
 
     class Droplet:
         def __init__(self, x, y, mass, drop_id, super, velocity=0, parent_id=None):
@@ -280,14 +284,18 @@ class Surface:
     def delete(self, droplet):
         if not isinstance(droplet, self.Droplet):
             raise TypeError()
-        if droplet in self.drop_array:
-            self.drop_array.remove(droplet)
-        elif droplet in self.active_drops:
+        if droplet in self.passive_drops:
+            self.passive_drops.remove(droplet)
+        if droplet in self.active_drops:
             self.active_drops.remove(droplet)
-        elif droplet in self.new_drops:
+        if droplet in self.new_drops:
             self.new_drops.remove(droplet)
+        if droplet in self.residual_drops:
+            self.residual_drops.remove(droplet)
 
-    def set_ids(self, old_id, new_id):
+    def set_ids(self, old_id, new_id, delete=False):
+        if delete:
+            self.trail_map[self.id_map == old_id] = True
         if old_id == 0:
             raise Exception("old_id should be a non zero value")
         self.id_map[self.id_map == old_id] = new_id
@@ -355,7 +363,7 @@ class Surface:
                     new_drop_mass = min(self.m_static, a*drop.mass)
                     drop.update_mass(drop.mass - new_drop_mass)
                     self.max_id += 1
-                    self.Droplet(drop.x, drop.y, new_drop_mass, self.max_id, self, parent_id=drop.id)
+                    self.residual_drops.append(self.Droplet(drop.x, drop.y, new_drop_mass, self.max_id, self, parent_id=drop.id))
 
     def compute_height_map(self):
         self.smooth_height_map()
@@ -376,6 +384,7 @@ class Surface:
                             if curr_id != drop.parent_id and curr_id != 0:
                                 collisions.append((drop.id, curr_id))
                             self.id_map[x, y] = drop.id
+                            self.trail_map[x, y] = True
         return collisions
 
     def update_height_map(self):
@@ -395,7 +404,18 @@ class Surface:
 
     def update_id_map(self):
         collisions = []
-        for drop in itertools.chain(self.active_drops, self.new_drops):
+        for drop in self.active_drops:
+            for y in range(drop.lowest_y - self.args.attraction, drop.highest_y + self.args.attraction):
+                for x in range(drop.lowest_x - self.args.attraction, drop.highest_x + self.args.attraction):
+                    if (0 <= y < self.height) and (0 <= x < self.width):
+                        if drop.get_id_at_pos(x, y):
+                            curr_id = self.id_map[x, y]
+                            if curr_id != drop.parent_id and curr_id != 0:
+                                collisions.append((drop.id,curr_id))
+                            self.id_map[x, y] = drop.id
+                            self.trail_map[x, y] = True
+
+        for drop in self.new_drops:
             for y in range(drop.lowest_y - self.args.attraction, drop.highest_y + self.args.attraction):
                 for x in range(drop.lowest_x - self.args.attraction, drop.highest_x + self.args.attraction):
                     if (0 <= y < self.height) and (0 <= x < self.width):
@@ -408,31 +428,12 @@ class Surface:
         return collisions
 
     def smooth_height_map(self):
-        self.height_map = ndimage.convolve(self.height_map, self.kernel, mode='constant', cval=0)
+        self.height_map[self.trail_map==True] = ndimage.convolve(self.height_map, self.kernel, mode='constant', cval=0)[self.trail_map==True]
 
     def floor_water(self):
         self.height_map[self.height_map < self.floor_value] = 0.0
         self.id_map[self.height_map == 0] = 0
-
-    # Detects intersections in O(n^2) time by polling each drop and cross checking radius merging.
-    def detect_intersections(self):
-        detections = []
-        temp_array = []
-        temp_array.extend(self.active_drops)
-        temp_array.extend(self.new_drops)
-
-        # All intersections of active and new drops with each other
-        for a in range(len(temp_array)):
-            for b in range(a+1, len(temp_array)):
-                if temp_array[a].intersects(temp_array[b]):
-                    detections.append((self.drop_array[a], self.drop_array[b]))
-
-        for drop_a in temp_array:
-            for drop_b in self.drop_array:
-                if drop_a.intersects(drop_b):
-                    detections.append((drop_a,drop_b))
-
-        return detections
+        self.trail_map[self.id_map == 0] = 0
 
     # Merges and deletes drops that have merged
     def merge_drops(self):
@@ -456,7 +457,7 @@ class Surface:
                 low_drop.update_mass(low_drop.mass + high_drop.mass)
                 low_drop.calculate_radius()
 
-                self.set_ids(low_drop.id, high_drop.id)
+                self.set_ids(low_drop.id, high_drop.id, delete=True)
                 self.delete(high_drop)
                 self.drop_dict.pop(high_drop.id)
 
@@ -488,29 +489,29 @@ class Surface:
             elapsed_time = time.time() - self.start_time
             output_string = output_string + "\nCalculation took " + str(elapsed_time) + " seconds."
         if show_drop_count:
-            output_string = output_string + "\nThere are currently " + str(len(self.drop_array) + len(self.active_drops)) + \
+            output_string = output_string + "\nThere are currently " + str(len(self.passive_drops) + len(self.active_drops)) + \
                             " drops in the height map, of which " + str(len(self.active_drops)) + " are in motion."
         if show_average_drop_mass:
             masses = 0.0
-            for drop in self.drop_array:
+            for drop in self.passive_drops:
                 masses += drop.mass
-            avg_mass = masses / len(self.drop_array)
+            avg_mass = masses / len(self.passive_drops)
             output_string = output_string + "\nThe average mass of the drops is " + str(avg_mass) + " kg."
         return output_string
 
     def clear_passives(self):
         to_pop = []
-        for drop_id in self.drop_dict.keys():
-            if self.drop_dict[drop_id] in self.drop_array:
-                if drop_id not in self.id_map:
-                    self.delete(self.drop_dict[drop_id])
-                    to_pop.append(drop_id)
+        for drop in self.passive_drops:
+            if drop.id not in self.id_map:
+                self.delete(drop)
+                to_pop.append(drop.id)
 
         for drop_id in to_pop:
             self.drop_dict.pop(drop_id)
 
     def step(self):
         self.new_drops = []
+        self.new_drops.extend(self.residual_drops)
         self.start_time = time.time()
 
         self.add_drops()  # Very fast
@@ -522,11 +523,10 @@ class Surface:
         self.trim_drops()  # Very fast
         #self.update_height_map_arrs()
         self.compute_height_map()
-        self.drop_array.extend(self.new_drops)
-        self.new_drops = []
+        self.passive_drops.extend(self.new_drops)
         self.steps_so_far += 1
 
-        self.clear_passives()
+        #self.clear_passives()
         return self.compose_string()
 
     def save(self):
@@ -544,7 +544,7 @@ class Surface:
         fo.save_temp(self.height_map, self.id_map, self.color_dict, self.args, self.steps_so_far)
 
     def add_old_drops(self):
-        self.new_drops = self.drop_array
+        self.new_drops = self.passive_drops
         self.update_height_map()
         self.compute_height_map()
 
