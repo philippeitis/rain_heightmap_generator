@@ -29,19 +29,21 @@ def single_process(args):
     from src import surface
     from src import file_ops as fo
     import math
-    for i in range(args.runs):
-        surface = surface.Surface(args, curr_run=i)
+    if args.video:
+        surface = surface.Surface(args)
+        surface.make_video()
+    else:
+        for i in range(args.runs):
+            surface = surface.Surface(args, curr_run=i)
 
-        for j in range(int(args.steps)):
-            string = surface.step()
-            if not args.silent:
-                print(string)
-            if args.video:
-                surface.save_temp()
+            for j in range(int(args.steps)):
+                string = surface.step()
+                if not args.silent:
+                    print(string)
+                if args.video:
+                    surface.save_temp()
 
-        for i in range(math.ceil(args.width / 720)):
-            surface.blur_masked()
-        if not args.video:
+            for i in range(math.ceil(args.width / 720)):
+                surface.blur_masked()
+
             surface.save()
-        else:
-            fo.save_as_video("./temp/", fo.choose_file_name(args, i))

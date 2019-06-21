@@ -85,6 +85,7 @@ def save_temp(height_map, id_map, color_dict, args, curr_step):
                 height = math.floor(height_map[x, y] / maximum_drop_size * 255)
                 pixels[x, y] = (height, height, height)
     im.save(file_name, 'PNG')
+    return color_dict
 
 
 def set_up_directories(args):
@@ -159,3 +160,27 @@ def clear_temp():
     for f in filelist:
         os.remove(os.path.join("./temp", f))
 
+
+def generate_graph(file_name, graph_data):
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    fig, ax1 = plt.subplots()
+    t = np.arange(1, len(graph_data) + 1, 1)
+    s1 = [row[0] for row in graph_data]
+    ax1.plot(t, s1, 'b-')
+    ax1.set_xlabel('Step #')
+    # Make the y-axis label, ticks and tick labels match the line color.
+    ax1.set_ylabel('Time (s)', color='b')
+    ax1.tick_params('y', colors='b')
+
+    ax2 = ax1.twinx()
+    s2 = [row[1] for row in graph_data]
+    ax2.plot(t, s2, 'r.')
+    ax2.set_ylabel('# of Drops', color='r')
+    ax2.tick_params('y', colors='r')
+
+    fig.tight_layout()
+
+    plt.show()
+    fig.savefig(file_name + "graph" + ".png")

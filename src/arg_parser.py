@@ -40,9 +40,9 @@ def parse_arguments():
                         help='Type of kernel used in smoothing step. '
                              '(dwn for downward trending, avg for averaging kernel)')
 
-    parser.add_argument('--dist', dest='dist', default="normal", choices=["normal", "uniform"],
+    parser.add_argument('--dist', dest='dist', default="norm", choices=["norm", "unif", "exp"],
                         help='Distribution used for determining drop masses.')
-    parser.add_argument('--mmin', dest='m_min', default=0.000010, type=float,
+    parser.add_argument('--mmin', dest='m_min', default=0.000001, type=float,
                         help='Minimum mass of droplets (kg)')
     parser.add_argument('--mavg', dest='m_avg', default=0.000034, type=float,
                         help='Average mass of drops (kg)')
@@ -51,6 +51,8 @@ def parse_arguments():
                              'values create more diverse drop sizes.')
     parser.add_argument('--mmax', dest='m_max', default=0.000240, type=float,
                         help='Maximum mass of droplets (kg)')
+    parser.add_argument('--mstatic', dest='m_static', default=None, type=float,
+                        help='Sets the mass of static drops. Will override --pstatic if set.')
     parser.add_argument('--pstatic', dest='p_static', default=0.8, type=float,
                         help='Sets the percentage of drops that are static.')
 
@@ -109,5 +111,8 @@ def parse_arguments():
     parser.add_argument('--video_load', dest='video_load', default=False, action='store_true',
                         help="In the case that the program crashes or you end execution early,"
                              "this option will take the images in temp and finish making the video.")
+    parser.add_argument('--graph', dest='graph', default=False, action='store_true',
+                        help="Will produce graphs of average drop mass and time to compute each step.")
+
     args = parser.parse_args()
     return args

@@ -24,11 +24,16 @@ class Surface:
         self.m_avg = args.m_avg
         self.m_dev = args.m_dev
 
-        if args.dist == "normal":
-            self.m_static = self.m_avg + self.m_dev * st.norm.ppf(args.p_static)
-        elif args.dist == "uniform":
-            self.m_static = self.m_max * args.p_static
-
+        if not args.m_static:
+            if args.dist == "norm":
+                self.m_static = self.m_avg + self.m_dev * st.norm.ppf(args.p_static)
+            elif args.dist == "unif":
+                self.m_static = (self.m_max - self.m_min) * args.p_static + self.m_min
+            elif args.dist == "exp":
+                self.m_static = -1 * self.m_avg * math.log(1-args.p_static)
+                print(self.m_static)
+        else:
+            self.m_static = args.m_static
         self.friction_constant_force = self.m_static * self.gravity
 
         self.hemispheres_enabled = args.enable_hemispheres
@@ -66,9 +71,10 @@ class Surface:
         self.start_time = None
         self.multiprocessing = multiprocessing
         self.curr_run = curr_run
-        self.avg = args.drops
+        self.num_drops = args.drops
         self.max_id = 0
         self.steps_so_far = 0
+        self.graph_data = []
 
     class Droplet:
         def __init__(self, x, y, mass, drop_id, super, velocity=0, parent_id=None):
@@ -95,9 +101,12 @@ class Surface:
             self.highest_y = 0
 
             self.id = drop_id
+            self.super.color_dict[drop_id] = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
             self.parent_id = parent_id
 
             self.super.drop_dict[drop_id] = self
+            if self.mass < self.super.m_static:
+                self.generate_hemispheres()
             self.update_mass(mass)
 
         def update_mass(self, mass):
@@ -109,8 +118,8 @@ class Surface:
                 self.super.active_drops.append(self)
             else:
                 self.super.new_drops.append(self)
-                self.generate_hemispheres()
             self.calculate_radius()
+            self.compute_bounding_box()
 
         def calculate_radius(self):
             # Precalculating avoids excessive computations.
@@ -145,6 +154,7 @@ class Surface:
                     break
                 else:
                     self.hemispheres.append((new_x, new_y))
+            self.calculate_radius()
             self.compute_bounding_box()
 
         def iterate_position(self):
@@ -210,7 +220,7 @@ class Surface:
                     internal_height_map = np.add(internal_height_map, np.sqrt(dists_from_center_sqr))
                     internal_height_map_counts[dists_from_center_sqr > 0] += 1
                 internal_height_map_counts[dists_from_center_sqr == 0] = 1
-                return np.divide(internal_height_map,internal_height_map_counts)
+                return np.divide(internal_height_map, internal_height_map_counts)
 
             else:
                 for x, y in self.hemispheres:
@@ -346,12 +356,12 @@ class Surface:
     # masses bounded by m_min and m_max
     def add_drops(self, num):
         for x in range(num):
-            if self.args.dist == "normal":
+            if self.args.dist == "norm":
                 mass = min(self.m_max, max(self.m_min, np.random.normal(self.m_avg, self.m_dev, 1)))
-            elif self.args.dist == "uniform":
+            elif self.args.dist == "unif":
                 mass = np.random.uniform(self.m_min, self.m_max)
-            ## TODO: add exponential distribution
-
+            elif self.args.dist == "exp":
+                mass = min(self.m_max, max(self.m_min, np.random.exponential(self.m_avg, 1)))
             self.max_id += 1
             ## Note: Drops add themselves to their arrays.
             self.Droplet(random.randint(0, self.width), random.randint(0, self.height), mass, self.max_id, self)
@@ -381,11 +391,13 @@ class Surface:
         self.smooth_height_map()
         self.floor_water()
 
-    def smooth_height_map(self):
-        self.height_map[self.trail_map == True] = ndimage.convolve(self.height_map, self.kernel, mode='constant', cval=0)[self.trail_map==True]
+    def smooth_height_map(self, times=1):
+        for i in range(times):
+            self.height_map = \
+                ndimage.convolve(self.height_map, self.kernel, mode='constant', cval=0)
 
     def floor_water(self):
-        self.height_map[self.height_map < self.floor_value] = 0.0
+        self.height_map[np.logical_and(self.height_map < self.floor_value, self.trail_map == True)] = 0.0
         self.id_map[self.height_map == 0] = 0
         self.trail_map[self.id_map == 0] = 0
 
@@ -403,7 +415,8 @@ class Surface:
                             curr_id = self.id_map[x, y]
                             if curr_id != drop.parent_id and curr_id != 0:
                                 collisions.append((drop.id, curr_id))
-                            self.id_map[x, y] = drop.id
+                            else:
+                                self.id_map[x, y] = drop.id
                             self.trail_map[x, y] = True
 
         for drop in self.new_drops:
@@ -452,42 +465,46 @@ class Surface:
                             self.id_map[x, y] = drop.id
                             self.trail_map[x, y] = True
 
-        for drop in self.passive_drops:
+        for drop in self.new_drops:
             for y in range(drop.lowest_y - self.args.attraction, drop.highest_y + self.args.attraction):
                 for x in range(drop.lowest_x - self.args.attraction, drop.highest_x + self.args.attraction):
                     if (0 <= y < self.height) and (0 <= x < self.width):
                         if drop.get_id_at_pos(x, y):
                             curr_id = self.id_map[x, y]
                             if curr_id != drop.parent_id and curr_id != 0:
-                                collisions.append((drop.id,curr_id))
+                                collisions.append((drop.id, curr_id))
                             self.id_map[x, y] = drop.id
 
         return collisions
 
     # Merges and deletes drops that have merged
     def merge_drops(self):
+        reassign_dict = {}
         intersecting_drops = self.update_maps()
 
         for a, b in intersecting_drops:
+            if not a in reassign_dict.keys():
+                reassign_dict[a] = a
+            if not b in reassign_dict.keys():
+                reassign_dict[b] = b
+
+            a = reassign_dict[a]
+            b = reassign_dict[b]
             if a in self.drop_dict.keys() and b in self.drop_dict.keys():
                 a = self.drop_dict[a]
                 b = self.drop_dict[b]
                 new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
 
-                if a.y < b.y:
-                    low_drop = a
-                    high_drop = b
-                else:
-                    low_drop = b
-                    high_drop = a
+                low_drop, high_drop = (a, b) if a.y > b.y else (b, a)
 
                 low_drop.velocity = new_velocity
                 low_drop.update_mass(low_drop.mass + high_drop.mass)
-                low_drop.calculate_radius()
 
                 self.set_ids(high_drop.id, low_drop.id, delete=True)
                 self.delete(high_drop)
                 self.drop_dict.pop(high_drop.id)
+                reassign_dict[high_drop.id] = low_drop.id
+                #[high_drop.id] = low_drop
 
     # Deletes drops that are out of bounds
     def trim_drops(self):
@@ -504,8 +521,19 @@ class Surface:
             self.set_ids(drop.id, 0)
             self.drop_dict.pop(drop.id)
 
-    def compose_string(self):
+    def compute_stats(self):
         import time
+        elapsed_time = time.time() - self.start_time
+        total_drop_count = len(self.passive_drops) + len(self.active_drops) + len(self.residual_drops)
+        active_drop_count = len(self.active_drops)
+        masses = [drop.mass for drop in self.drop_dict.values()]
+        average_mass = sum(masses)/len(masses)
+        if self.args.graph:
+            self.graph_data.append((elapsed_time, total_drop_count, active_drop_count, average_mass))
+        return elapsed_time, total_drop_count, active_drop_count, average_mass
+
+    def compose_string(self):
+        elapsed_time, total_drop_count, active_drop_count, average_mass = self.compute_stats()
         verbose = self.args.verbose
         show_time = "t" in verbose
         show_drop_count = "d" in verbose
@@ -514,14 +542,12 @@ class Surface:
         output_string = "\rStep " + str(self.steps_so_far) + " out of " + str(self.args.steps) + " is complete."
 
         if show_time:
-            elapsed_time = time.time() - self.start_time
             output_string = output_string + "\nCalculation took " + str(elapsed_time) + " seconds."
         if show_drop_count:
-            output_string = output_string + "\nThere are currently " + str(len(self.passive_drops) + len(self.active_drops)) + \
-                            " drops in the height map, of which " + str(len(self.active_drops)) + " are in motion."
+            output_string = output_string + "\nThere are currently " + str(total_drop_count) +\
+                            " drops in the height map, of which " + str(active_drop_count) + " are in motion."
         if show_average_drop_mass:
-            masses = [drop.mass for drop in self.drop_dict.values()]
-            output_string = output_string + "\nThe average mass of the drops is " + str(sum(masses)/len(masses)) + " kg."
+            output_string = output_string + "\nThe average mass of the drops is " + str(average_mass) + " kg."
         return output_string
 
     def clear_passives(self):
@@ -532,14 +558,15 @@ class Surface:
                 to_pop.append(drop.id)
 
         for drop_id in to_pop:
-            self.drop_dict.pop(drop_id)
+            if drop_id in self.drop_dict:
+                self.drop_dict.pop(drop_id)
 
     def step(self):
         self.new_drops = []
         self.new_drops.extend(self.residual_drops)
         self.start_time = time.time()
 
-        self.add_drops(self.avg)
+        self.add_drops(self.num_drops)
         self.iterate_over_drops()
 
         if self.args.leave_residuals:
@@ -550,19 +577,25 @@ class Surface:
         self.compute_height_map()
         self.passive_drops.extend(self.new_drops)
         self.steps_so_far += 1
-
-        #self.clear_passives()
+        self.clear_passives()
         return self.compose_string()
 
     def save(self):
         from src import file_ops as fo
+        file_name = fo.choose_file_name(self.args, self.curr_run)
+        if self.args.video:
+            fo.save_as_video("./temp/", fo.choose_file_name(self.args, self.curr_run))
+
         if self.multiprocessing:
             fo.save(fo.choose_file_name(self.args, self.curr_run), self.height_map, self.id_map, self.args)
             print("\rRun " + str(self.curr_run +1) + " out of " + str(self.args.runs) + " is complete.")
         else:
-            fo.save(fo.choose_file_name(self.args, self.curr_run), self.height_map, self.id_map, self.args)
+            fo.save(file_name, self.height_map, self.id_map, self.args)
             if self.args.runs > 1:
                 print("\rRun " + str(self.curr_run + 1) + " out of " + str(self.args.runs) + " is complete.")
+
+        if self.args.graph:
+            fo.generate_graph(file_name, self.graph_data)
 
     def save_temp(self):
         from src import file_ops as fo
@@ -581,3 +614,30 @@ class Surface:
         self.height_map[height_map_copy == 0] = 0
         self.smooth_height_map()
         self.height_map[height_map_copy == 0] = 0
+
+    def save_temp_mp(self, queue):
+        from src import file_ops as fo
+        while not queue.empty() and self.steps_so_far != self.args.steps:
+            height_map, id_map, color_dict, args, steps_so_far = queue.get()
+            fo.save_temp(height_map, id_map, color_dict, args, steps_so_far)
+
+    def make_video(self):
+        import src.file_ops as fo
+        from multiprocessing import Process, Queue
+        import multiprocessing
+        q = Queue()
+        processes = []
+        for i in range(multiprocessing.cpu_count() - 1):
+            p = Process(target=self.save_temp_mp, args=(q, ))
+            processes.append(p)
+
+        for i in range(self.args.steps):
+            print(self.step())
+            q.put((np.copy(self.height_map), np.copy(self.id_map), self.color_dict, self.args, self.steps_so_far))
+            if i < len(processes):
+                processes[i].start()
+
+        for p in processes:
+            p.join()
+
+        self.save()
