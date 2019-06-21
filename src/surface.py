@@ -316,22 +316,22 @@ class Surface:
         sum2 = np.sum(self.height_map[x_2:x_3+1, start_y:end_y + 1])
         sum3 = np.sum(self.height_map[x_3:x_4 + 1, start_y:end_y + 1])
 
-        if sum1 > sum2 >= sum3:
+        if sum1 > sum2 and sum1 > sum3:
             return -1
-        if sum2 > sum1 >= sum3:
+        if sum2 > sum1 and sum2 > sum3:
             return 0
-        if sum3 > sum1 >= sum2:
+        if sum3 > sum1 and sum3 > sum2:
             return 1
         else:
             sum1 = np.sum(self.affinity_map[x_1:x_2 + 1, start_y:end_y + 1])
             sum2 = np.sum(self.affinity_map[x_2:x_3 + 1, start_y:end_y + 1])
             sum3 = np.sum(self.affinity_map[x_3:x_4 + 1, start_y:end_y + 1])
 
-            if sum1 > sum2 >= sum3 or sum1 > sum3 >= sum2:
+            if sum1 > sum2 and sum1 > sum3:
                 return -1
-            if sum2 > sum1 >= sum3 or sum2 > sum3 >= sum1:
+            if sum2 > sum1 and sum2 > sum3:
                 return 0
-            if sum3 > sum1 >= sum2 or sum3 > sum2 >= sum1:
+            if sum3 > sum1 and sum3 > sum2:
                 return 1
             else:
                 return 0
@@ -371,7 +371,7 @@ class Surface:
 
     def update_maps(self):
         collisions = []
-        for drop in itertools.chain(self.active_drops, self.new_drops):
+        for drop in self.active_drops:
             for y in range(drop.lowest_y - self.args.attraction, drop.highest_y + self.args.attraction):
                 for x in range(drop.lowest_x - self.args.attraction, drop.highest_x + self.args.attraction):
                     if (0 <= y < self.height) and (0 <= x < self.width):
@@ -385,6 +385,22 @@ class Surface:
                                 collisions.append((drop.id, curr_id))
                             self.id_map[x, y] = drop.id
                             self.trail_map[x, y] = True
+
+        for drop in self.new_drops:
+            for y in range(drop.lowest_y - self.args.attraction, drop.highest_y + self.args.attraction):
+                for x in range(drop.lowest_x - self.args.attraction, drop.highest_x + self.args.attraction):
+                    if (0 <= y < self.height) and (0 <= x < self.width):
+                        new_height, flag = drop.get_height_and_id(x, y)
+                        if self.height_map[x, y] < new_height:
+                            self.height_map[x, y] = new_height
+
+                        if flag:
+                            curr_id = self.id_map[x, y]
+                            if curr_id != drop.parent_id and curr_id != 0:
+                                collisions.append((drop.id, curr_id))
+                            self.id_map[x, y] = drop.id
+                            self.trail_map[x, y] = False
+
         return collisions
 
     def update_height_map(self):
@@ -457,7 +473,7 @@ class Surface:
                 low_drop.update_mass(low_drop.mass + high_drop.mass)
                 low_drop.calculate_radius()
 
-                self.set_ids(low_drop.id, high_drop.id, delete=True)
+                self.set_ids(high_drop.id, low_drop.id, delete=True)
                 self.delete(high_drop)
                 self.drop_dict.pop(high_drop.id)
 
