@@ -363,7 +363,11 @@ class Surface:
                     new_drop_mass = min(self.m_static, a*drop.mass)
                     drop.update_mass(drop.mass - new_drop_mass)
                     self.max_id += 1
-                    self.residual_drops.append(self.Droplet(drop.x, drop.y, new_drop_mass, self.max_id, self, parent_id=drop.id))
+                    if len(drop.path) > 0:
+                        x, y = random.choice(drop.path)
+                    else:
+                        x, y = drop.x, drop.y
+                    self.residual_drops.append(self.Droplet(x, y, new_drop_mass, self.max_id, self, parent_id=drop.id))
 
     def compute_height_map(self):
         self.smooth_height_map()
@@ -431,7 +435,7 @@ class Surface:
                             self.id_map[x, y] = drop.id
                             self.trail_map[x, y] = True
 
-        for drop in self.new_drops:
+        for drop in self.passive_drops:
             for y in range(drop.lowest_y - self.args.attraction, drop.highest_y + self.args.attraction):
                 for x in range(drop.lowest_x - self.args.attraction, drop.highest_x + self.args.attraction):
                     if (0 <= y < self.height) and (0 <= x < self.width):
