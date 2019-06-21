@@ -79,7 +79,7 @@ def save_temp(height_map, id_map, color_dict, args, curr_step):
                     color_dict[id_map[x, y]] = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
 
                 pixel = color_dict[id_map[x, y]]
-                height = height_map[y, x] / maximum_drop_size
+                height = height_map[x, y] / maximum_drop_size
                 pixels[x, y] = tuple([math.floor(height * x) for x in pixel])
             else:
                 height = math.floor(height_map[x, y] / maximum_drop_size * 255)

@@ -111,7 +111,7 @@ class Surface:
             self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / self.super.density_water) * self.super.scale_factor * self.super.width
             self.rad_sqr = self.radius ** 2
             self.rad_sqr_extended = (self.radius + self.super.attraction_radius) ** 2
-            self.delta = -2 * self.super.attraction_radius - self.super.attraction_radius ** 2
+            self.delta = self.rad_sqr - self.rad_sqr_extended
 
         def generate_hemispheres(self):
             # Random walk to decide locations of hemispheres.
