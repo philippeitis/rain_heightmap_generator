@@ -133,6 +133,7 @@ def choose_file_name_per_run(args, curr_run):
 
     return name
 
+
 def save_as_video(folder_name,file_name):
     import cv2
     import os
@@ -141,7 +142,7 @@ def save_as_video(folder_name,file_name):
     frame = cv2.imread(os.path.join(folder_name, images[0]))
     height, width, layers = frame.shape
 
-    video = cv2.VideoWriter(file_name + ".avi", 0, 24, (width, height))
+    video = cv2.VideoWriter(file_name + ".mp4", cv2.VideoWriter_fourcc(*'H264'), 24, (width, height))
 
     for image in images:
         video.write(cv2.imread(os.path.join(folder_name, image)))

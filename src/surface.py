@@ -39,14 +39,13 @@ class Surface:
         self.time_step = args.time
         self.t_max = self.time_step * 4
         self.beta = args.beta
-        self.floor_value = args.floor_value
         self.residual_floor, self.residual_ceil = args.residual_floor, args.residual_ceil
         self.floor_value = args.floor_value
 
         if args.kernel == "dwn":
-            self.kernel = np.array([[4 / 27, 1 / 9, 2 / 27],
-                               [4 / 27, 1 / 9, 2 / 27],
-                               [4 / 27, 1 / 9, 2 / 27]])
+            self.kernel = np.array([[2 / 27, 1 / 9, 4 / 27],
+                               [2 / 27, 1 / 9, 4 / 27],
+                               [2 / 27, 1 / 9, 4 / 27]])
         else:
             self.kernel = np.array([[1 / 9, 1 / 9, 1 / 9],
                                [1 / 9, 1 / 9, 1 / 9],
@@ -79,21 +78,27 @@ class Surface:
             self.velocity = velocity
             self.direction = 0
             self.t_i = 0
-            self.path = []
             self.super = super
+
+            # self.path uses different logic from self.hemispheres to calculate radius
+            self.path = []
             self.hemispheres = [(self.x, self.y)]  # (x,y) tuples (could add z to represent share of mass)
+
             self.radius = 0
             self.rad_sqr = 0
             self.rad_sqr_extended = 0
             self.delta = 0
+
             self.lowest_x = 0
             self.lowest_y = 0
             self.highest_x = 0
             self.highest_y = 0
+
             self.id = drop_id
+            self.parent_id = parent_id
+
             self.super.drop_dict[drop_id] = self
             self.update_mass(mass)
-            self.parent_id = parent_id
 
         def update_mass(self, mass):
             self.super.delete(self)
@@ -108,6 +113,7 @@ class Surface:
             self.calculate_radius()
 
         def calculate_radius(self):
+            # Precalculating avoids excessive computations.
             self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / self.super.density_water) * self.super.scale_factor * self.super.width
             self.rad_sqr = self.radius ** 2
             self.rad_sqr_extended = (self.radius + self.super.attraction_radius) ** 2
@@ -312,8 +318,8 @@ class Surface:
         x_3 = droplet.x + radius
         x_4 = droplet.x + 3 * radius
 
-        sum1 = np.sum(self.height_map[x_1:x_2+1, start_y:end_y + 1])
-        sum2 = np.sum(self.height_map[x_2:x_3+1, start_y:end_y + 1])
+        sum1 = np.sum(self.height_map[x_1:x_2 + 1, start_y:end_y + 1])
+        sum2 = np.sum(self.height_map[x_2:x_3 + 1, start_y:end_y + 1])
         sum3 = np.sum(self.height_map[x_3:x_4 + 1, start_y:end_y + 1])
 
         if sum1 > sum2 and sum1 > sum3:
@@ -338,17 +344,19 @@ class Surface:
 
     # Adds avg drops, placed randomly on the height map, with randomly generated
     # masses bounded by m_min and m_max
-    def add_drops(self):
-        for x in range(self.avg):
+    def add_drops(self, num):
+        for x in range(num):
             if self.args.dist == "normal":
                 mass = min(self.m_max, max(self.m_min, np.random.normal(self.m_avg, self.m_dev, 1)))
             elif self.args.dist == "uniform":
                 mass = np.random.uniform(self.m_min, self.m_max)
+            ## TODO: add exponential distribution
 
             self.max_id += 1
+            ## Note: Drops add themselves to their arrays.
             self.Droplet(random.randint(0, self.width), random.randint(0, self.height), mass, self.max_id, self)
 
-    # Iterates over all active drops (which are moving faster than a given speed) to update their position
+    # Iterates over all active drops (which have mass > n) to update their position
     def iterate_over_drops(self):
         for drop in self.active_drops:
             drop.iterate_position()
@@ -359,7 +367,7 @@ class Surface:
             if drop.mass > self.m_static:
                 if drop.residual_probability() > np.random.uniform():
                     drop.t_i = 0
-                    a = np.random.uniform(self.residual_floor, self.residual_ceil) # Pass in as command line args
+                    a = np.random.uniform(self.residual_floor, self.residual_ceil)
                     new_drop_mass = min(self.m_static, a*drop.mass)
                     drop.update_mass(drop.mass - new_drop_mass)
                     self.max_id += 1
@@ -372,6 +380,14 @@ class Surface:
     def compute_height_map(self):
         self.smooth_height_map()
         self.floor_water()
+
+    def smooth_height_map(self):
+        self.height_map[self.trail_map == True] = ndimage.convolve(self.height_map, self.kernel, mode='constant', cval=0)[self.trail_map==True]
+
+    def floor_water(self):
+        self.height_map[self.height_map < self.floor_value] = 0.0
+        self.id_map[self.height_map == 0] = 0
+        self.trail_map[self.id_map == 0] = 0
 
     def update_maps(self):
         collisions = []
@@ -407,6 +423,7 @@ class Surface:
 
         return collisions
 
+    ## Currently not in use
     def update_height_map(self):
         for drop in itertools.chain(self.active_drops, self.new_drops):
             for y in range(drop.lowest_y, drop.highest_y):
@@ -447,17 +464,8 @@ class Surface:
 
         return collisions
 
-    def smooth_height_map(self):
-        self.height_map[self.trail_map == True] = ndimage.convolve(self.height_map, self.kernel, mode='constant', cval=0)[self.trail_map==True]
-
-    def floor_water(self):
-        self.height_map[self.height_map < self.floor_value] = 0.0
-        self.id_map[self.height_map == 0] = 0
-        self.trail_map[self.id_map == 0] = 0
-
     # Merges and deletes drops that have merged
     def merge_drops(self):
-        #intersecting_drops = self.update_id_map()
         intersecting_drops = self.update_maps()
 
         for a, b in intersecting_drops:
@@ -512,11 +520,8 @@ class Surface:
             output_string = output_string + "\nThere are currently " + str(len(self.passive_drops) + len(self.active_drops)) + \
                             " drops in the height map, of which " + str(len(self.active_drops)) + " are in motion."
         if show_average_drop_mass:
-            masses = 0.0
-            for drop in self.passive_drops:
-                masses += drop.mass
-            avg_mass = masses / len(self.passive_drops)
-            output_string = output_string + "\nThe average mass of the drops is " + str(avg_mass) + " kg."
+            masses = [drop.mass for drop in self.drop_dict.values()]
+            output_string = output_string + "\nThe average mass of the drops is " + str(sum(masses)/len(masses)) + " kg."
         return output_string
 
     def clear_passives(self):
@@ -534,13 +539,13 @@ class Surface:
         self.new_drops.extend(self.residual_drops)
         self.start_time = time.time()
 
-        self.add_drops()  # Very fast
-        self.iterate_over_drops()  # Very fast
+        self.add_drops(self.avg)
+        self.iterate_over_drops()
 
-        if bool(self.args.leave_residuals):
-            self.leave_residual_droplets()  # Very fast
-        self.merge_drops()  # Takes around 1/3 of the processing time
-        self.trim_drops()  # Very fast
+        if self.args.leave_residuals:
+            self.leave_residual_droplets()
+        self.merge_drops()
+        self.trim_drops()
         #self.update_height_map_arrs()
         self.compute_height_map()
         self.passive_drops.extend(self.new_drops)

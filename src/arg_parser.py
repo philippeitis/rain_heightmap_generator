@@ -27,7 +27,7 @@ def parse_arguments():
                         help='Disables leaving residual drops')
     parser.set_defaults(leave_residuals=True)
 
-    parser.add_argument('--beta', dest='beta', default=0.5, type=float,
+    parser.add_argument('--beta', dest='beta', default=3, type=float,
                         help='Sets value b in equation used to determine if drop should be left or not')
     parser.add_argument('--floorval', dest='floor_value', default=1.2, type=float,
                         help='Drops below the given height will be set to zero.')
@@ -42,7 +42,7 @@ def parse_arguments():
 
     parser.add_argument('--dist', dest='dist', default="normal", choices=["normal", "uniform"],
                         help='Distribution used for determining drop masses.')
-    parser.add_argument('--mmin', dest='m_min', default=0.000001, type=float,
+    parser.add_argument('--mmin', dest='m_min', default=0.000010, type=float,
                         help='Minimum mass of droplets (kg)')
     parser.add_argument('--mavg', dest='m_avg', default=0.000034, type=float,
                         help='Average mass of drops (kg)')
@@ -96,16 +96,18 @@ def parse_arguments():
     parser.add_argument('--runs', dest='runs', default=1, type=int,
                         help='Will execute the program with the given parameters repeatedly.')
     parser.add_argument('--mt', dest='mt', default=False, action='store_true',
-                        help='Enables multithreading for the program.')
+                        help='Enables multithreading for the program. Does not support video')
     parser.add_argument('--verbose', dest='verbose', default="", type=str,
                         help='Will output detailed information on program operation. '
                         't : time to execute each step, '
                         'd : number of droplets in each step, '
                         'a : average mass of droplets in each step.')
     parser.add_argument('--profile', dest='profile', default=False, action='store_true',
-                        help='Profiles code.')
-
+                        help='Profiles code if enabled, using the cProfile library. Will save results as data.txt.')
     parser.add_argument('--video', dest='video', default=False, action='store_true',
                         help='Saves series of images as video.')
+    parser.add_argument('--video_load', dest='video_load', default=False, action='store_true',
+                        help="In the case that the program crashes or you end execution early,"
+                             "this option will take the images in temp and finish making the video.")
     args = parser.parse_args()
     return args

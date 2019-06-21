@@ -5,7 +5,8 @@ if __name__ == '__main__':
     args = ap.parse_arguments()
 
     fo.set_up_directories(args)
-
+    if args.video_load:
+        fo.save_as_video("./temp", fo.choose_file_name(args, 1))
     if not args.profile:
         if not args.name:
             args.name = fo.generate_time_stamp()
