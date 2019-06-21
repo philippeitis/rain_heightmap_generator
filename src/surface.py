@@ -56,20 +56,20 @@ class Surface:
         self.active_drops = []
         self.residual_drops = []
         self.new_drops = []
+        self.drop_dict = {}
+        self.color_dict = {0: (255, 255, 255)}
+
         self.height_map = np.zeros(shape=(self.width, self.height))
         self.id_map = np.zeros(shape=(self.width, self.height))
+        self.trail_map = np.zeros(shape=(self.width, self.height), dtype=bool)
+        self.affinity_map = np.reshape(np.random.uniform(size=self.width*self.height), (self.width,self.height))
+
         self.start_time = None
         self.multiprocessing = multiprocessing
         self.curr_run = curr_run
         self.avg = args.drops
         self.max_id = 0
         self.steps_so_far = 0
-        self.drop_dict = {}
-        self.trail_map = np.zeros(shape=(self.width, self.height), dtype=bool)
-        self.color_dict = {0: (255, 255, 255)}
-        self.affinity_map = np.reshape(np.random.uniform(size=self.width*self.height), (self.width,self.height))
-        self.static_drop_map = np.zeros(shape=(self.width, self.height))
-
 
     class Droplet:
         def __init__(self, x, y, mass, drop_id, super, velocity=0, parent_id=None):
@@ -257,7 +257,7 @@ class Surface:
                     return 0, flag
 
                 else: # <- Never gets touched
-                    distance_from_center_sqr = [(x-hemi_x)**2 + (y-hemi_y)**2 for hemi_x, hemi_y in self.path]
+                    distance_from_center_sqr = [(x-hemi_x)**2 + (y-hemi_y)**2 for hemi_x, hemi_y in self.hemispheres]
                     summation = 0
                     count = 0
                     for delta_distance in distance_from_center_sqr:
@@ -448,7 +448,7 @@ class Surface:
         return collisions
 
     def smooth_height_map(self):
-        self.height_map[self.trail_map==True] = ndimage.convolve(self.height_map, self.kernel, mode='constant', cval=0)[self.trail_map==True]
+        self.height_map[self.trail_map == True] = ndimage.convolve(self.height_map, self.kernel, mode='constant', cval=0)[self.trail_map==True]
 
     def floor_water(self):
         self.height_map[self.height_map < self.floor_value] = 0.0
