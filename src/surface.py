@@ -318,6 +318,8 @@ class Surface:
             self.residual_drops.remove(droplet)
 
     def set_ids(self, old_id, new_id, delete=False):
+        old_id, new_id = int(old_id), int(new_id)
+        print("old", old_id, "new", new_id)
         if delete:
             self.trail_map[self.id_map == old_id] = True
         if old_id == 0:
@@ -421,7 +423,7 @@ class Surface:
 
                         if flag:
                             curr_id = self.id_map[x, y]
-                            if curr_id != drop.parent_id and curr_id != 0:
+                            if curr_id != drop.parent_id and curr_id != 0 and curr_id != drop.id:
                                 collisions.append((drop.id, curr_id))
                             else:
                                 self.id_map[x, y] = drop.id
@@ -437,7 +439,7 @@ class Surface:
 
                         if flag:
                             curr_id = self.id_map[x, y]
-                            if curr_id != drop.parent_id and curr_id != 0:
+                            if curr_id != drop.parent_id and curr_id != 0 and curr_id != drop.id:
                                 collisions.append((drop.id, curr_id))
                             self.id_map[x, y] = drop.id
                             self.trail_map[x, y] = False
