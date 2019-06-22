@@ -403,8 +403,8 @@ class Surface:
 
     def smooth_height_map(self, times=1):
         for i in range(times):
-            self.height_map[self.trail_map == True] = \
-                ndimage.convolve(self.height_map, self.kernel, mode='constant', cval=0)[self.trail_map == True]
+            self.height_map = \
+                ndimage.convolve(self.height_map, self.kernel, mode='constant', cval=0)
 
     def floor_water(self):
         self.height_map[self.height_map < self.floor_value] = 0.0
@@ -528,6 +528,7 @@ class Surface:
                 low_drop.velocity = new_velocity
                 low_drop.update_mass(low_drop.mass + high_drop.mass)
                 self.set_ids(high_drop.id, low_drop.id, delete=True)
+                self.set_ids(low_drop.id, low_drop.id, delete=True)
                 self.delete(high_drop)
                 self.drop_dict.pop(high_drop.id)
                 self.reassert_drop(low_drop)

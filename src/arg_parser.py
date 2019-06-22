@@ -14,7 +14,7 @@ def parse_arguments():
     parser.add_argument('--w', dest='density_water', default=1000, type=int,
                         help='Sets the density of water, in kg/m^3')
 
-    parser.add_argument('--drops', dest='drops', default=5, type=int,
+    parser.add_argument('--drops', dest='drops', default=24, type=int,
                         help='Sets the number of drops added to the height map '
                              'each time step.')
 
@@ -29,7 +29,7 @@ def parse_arguments():
 
     parser.add_argument('--beta', dest='beta', default=3, type=float,
                         help='Sets value b in equation used to determine if drop should be left or not')
-    parser.add_argument('--floorval', dest='floor_value', default=1.2, type=float,
+    parser.add_argument('--floorval', dest='floor_value', default=None, type=float,
                         help='Drops below the given height will be set to zero.')
     parser.add_argument('--residual_floor', dest='residual_floor', default=0.1, type=float,
                         help='Lower bound for mass drops will lose to residual drops.')
@@ -115,4 +115,6 @@ def parse_arguments():
                         help="Will produce graphs of average drop mass and time to compute each step.")
 
     args = parser.parse_args()
+    if args.floor_value is None:
+        args.floor_value = 1.2 * args.width / 720
     return args
