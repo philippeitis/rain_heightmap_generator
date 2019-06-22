@@ -26,6 +26,7 @@ def multi_processing(args):
 
 
 def single_process(args):
+    import sys
     from src import surface
     from src import file_ops as fo
     import math
@@ -35,11 +36,10 @@ def single_process(args):
     else:
         for i in range(args.runs):
             surface = surface.Surface(args, curr_run=i)
-
             for j in range(int(args.steps)):
                 string = surface.step()
                 if not args.silent:
-                    print(string)
+                    print(string + "\r")
                 if args.video:
                     surface.save_temp()
 

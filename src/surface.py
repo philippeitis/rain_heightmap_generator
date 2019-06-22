@@ -31,7 +31,6 @@ class Surface:
                 self.m_static = (self.m_max - self.m_min) * args.p_static + self.m_min
             elif args.dist == "exp":
                 self.m_static = -1 * self.m_avg * math.log(1-args.p_static)
-                print(self.m_static)
         else:
             self.m_static = args.m_static
         self.friction_constant_force = self.m_static * self.gravity
@@ -46,7 +45,6 @@ class Surface:
         self.beta = args.beta
         self.residual_floor, self.residual_ceil = args.residual_floor, args.residual_ceil
         self.floor_value = args.floor_value
-
         if args.kernel == "dwn":
             self.kernel = np.array([[2 / 27, 1 / 9, 4 / 27],
                                [2 / 27, 1 / 9, 4 / 27],
@@ -64,7 +62,7 @@ class Surface:
         self.color_dict = {0: (255, 255, 255)}
 
         self.height_map = np.zeros(shape=(self.width, self.height))
-        self.id_map = np.zeros(shape=(self.width, self.height))
+        self.id_map = np.zeros(shape=(self.width, self.height),dtype=int)
         self.trail_map = np.ones(shape=(self.width, self.height), dtype=bool)
         self.affinity_map = np.reshape(np.random.uniform(size=self.width*self.height), (self.width,self.height))
 
@@ -101,7 +99,10 @@ class Surface:
             self.highest_y = 0
 
             self.id = drop_id
-            self.super.color_dict[drop_id] = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+            if mass > self.super.m_static:
+                self.super.color_dict[drop_id] = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+            else:
+                self.super.color_dict[drop_id] = (255,255,255)
             self.parent_id = parent_id
 
             self.super.drop_dict[drop_id] = self
@@ -113,10 +114,12 @@ class Surface:
             self.super.delete(self)
             self.mass = mass
             if mass > self.super.m_static:
+                print("now active", self.id, self.mass)
                 self.hemispheres = [(self.x, self.y)]
                 self.path = []
                 self.super.active_drops.append(self)
             else:
+                print("now new", self.id, self.mass)
                 self.super.new_drops.append(self)
             self.calculate_radius()
             self.compute_bounding_box()
@@ -127,6 +130,11 @@ class Surface:
             self.rad_sqr = self.radius ** 2
             self.rad_sqr_extended = (self.radius + self.super.attraction_radius) ** 2
             self.delta = self.rad_sqr - self.rad_sqr_extended
+            if self.mass > self.super.m_static:
+                self.radius *= 1/2
+                self.rad_sqr *= 1/4
+                self.rad_sqr_extended = (self.radius + self.super.attraction_radius) ** 2
+                self.delta = self.rad_sqr - self.rad_sqr_extended
 
         def generate_hemispheres(self):
             # Random walk to decide locations of hemispheres.
@@ -393,13 +401,13 @@ class Surface:
 
     def smooth_height_map(self, times=1):
         for i in range(times):
-            self.height_map = \
-                ndimage.convolve(self.height_map, self.kernel, mode='constant', cval=0)
+            self.height_map[self.trail_map == True] = \
+                ndimage.convolve(self.height_map, self.kernel, mode='constant', cval=0)[self.trail_map == True]
 
     def floor_water(self):
         self.height_map[self.height_map < self.floor_value] = 0.0
         self.id_map[self.height_map == 0] = 0
-        self.trail_map[self.id_map == 0] = 0
+        self.trail_map[self.id_map == 0] = False
 
     def update_maps(self):
         collisions = []
@@ -483,25 +491,28 @@ class Surface:
         reassign_dict = {}
         intersecting_drops = self.update_maps()
 
-        for a, b in intersecting_drops:
-            if not a in reassign_dict.keys():
+        for a, b in set(intersecting_drops):
+            print("AB:",a,b)
+            if a not in reassign_dict.keys():
                 reassign_dict[a] = a
-            if not b in reassign_dict.keys():
+            if b not in reassign_dict.keys():
                 reassign_dict[b] = b
 
             a = reassign_dict[a]
             b = reassign_dict[b]
-            if a in self.drop_dict.keys() and b in self.drop_dict.keys():
+
+            if a in self.drop_dict.keys() and b in self.drop_dict.keys() and a != b:
                 a = self.drop_dict[a]
                 b = self.drop_dict[b]
+                print("MASSES: ", a.mass, b.mass)
+                print("VELOCITIES: ", a.velocity, b.velocity)
+
                 new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
-
                 low_drop, high_drop = (a, b) if a.y > b.y else (b, a)
-
+                print(new_velocity * self.scale_factor * self.width, low_drop.mass + high_drop.mass)
                 low_drop.velocity = new_velocity
                 low_drop.update_mass(low_drop.mass + high_drop.mass)
-
-                self.set_ids(high_drop.id, low_drop.id, delete=True)
+                self.set_ids(high_drop.id, low_drop.id)
                 self.delete(high_drop)
                 self.drop_dict.pop(high_drop.id)
                 reassign_dict[high_drop.id] = low_drop.id
@@ -573,10 +584,10 @@ class Surface:
         self.merge_drops()
         self.trim_drops()
         #self.update_height_map_arrs()
-        #self.compute_height_map()
+        self.compute_height_map()
         self.passive_drops.extend(self.new_drops)
         self.steps_so_far += 1
-        self.clear_passives()
+        #self.clear_passives()
         return self.compose_string()
 
     def save(self):
