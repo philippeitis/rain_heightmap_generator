@@ -407,7 +407,7 @@ class Surface:
     def floor_water(self):
         self.height_map[self.height_map < self.floor_value] = 0.0
         self.id_map[self.height_map == 0] = 0
-        self.trail_map[self.id_map == 0] = False
+        self.trail_map[self.height_map == 0] = True
 
     def update_maps(self):
         collisions = []
@@ -512,7 +512,7 @@ class Surface:
                 print(new_velocity * self.scale_factor * self.width, low_drop.mass + high_drop.mass)
                 low_drop.velocity = new_velocity
                 low_drop.update_mass(low_drop.mass + high_drop.mass)
-                self.set_ids(high_drop.id, low_drop.id)
+                self.set_ids(high_drop.id, low_drop.id, delete=True)
                 self.delete(high_drop)
                 self.drop_dict.pop(high_drop.id)
                 reassign_dict[high_drop.id] = low_drop.id
@@ -574,6 +574,7 @@ class Surface:
                 self.drop_dict.pop(drop_id)
 
     def step(self):
+        self.new_drops.extend(self.residual_drops)
         self.start_time = time.time()
 
         self.add_drops(self.num_drops)
