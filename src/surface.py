@@ -480,11 +480,24 @@ class Surface:
                     if (0 <= y < self.height) and (0 <= x < self.width):
                         if drop.get_id_at_pos(x, y):
                             curr_id = self.id_map[x, y]
-                            if curr_id != drop.parent_id and curr_id != 0:
+                            if curr_id != drop.parent_id and curr_id != 0 and curr_id != drop.id:
                                 collisions.append((drop.id, curr_id))
                             self.id_map[x, y] = drop.id
 
         return collisions
+
+    def reassert_drop(self, drop):
+        for y in range(drop.lowest_y - self.args.attraction, drop.highest_y + self.args.attraction):
+            for x in range(drop.lowest_x - self.args.attraction, drop.highest_x + self.args.attraction):
+                if (0 <= y < self.height) and (0 <= x < self.width):
+                    new_height, flag = drop.get_height_and_id(x, y)
+                    if self.height_map[x, y] < new_height:
+                        self.height_map[x, y] = new_height
+
+                    if flag:
+                        curr_id = self.id_map[x, y]
+                        self.id_map[x, y] = drop.id
+                        self.trail_map[x, y] = False
 
     # Merges and deletes drops that have merged
     def merge_drops(self):
@@ -515,6 +528,7 @@ class Surface:
                 self.set_ids(high_drop.id, low_drop.id, delete=True)
                 self.delete(high_drop)
                 self.drop_dict.pop(high_drop.id)
+                self.reassert_drop(low_drop)
                 reassign_dict[high_drop.id] = low_drop.id
                 #[high_drop.id] = low_drop
 
