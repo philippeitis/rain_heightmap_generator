@@ -65,7 +65,7 @@ class Surface:
 
         self.height_map = np.zeros(shape=(self.width, self.height))
         self.id_map = np.zeros(shape=(self.width, self.height))
-        self.trail_map = np.zeros(shape=(self.width, self.height), dtype=bool)
+        self.trail_map = np.ones(shape=(self.width, self.height), dtype=bool)
         self.affinity_map = np.reshape(np.random.uniform(size=self.width*self.height), (self.width,self.height))
 
         self.start_time = None
@@ -397,7 +397,7 @@ class Surface:
                 ndimage.convolve(self.height_map, self.kernel, mode='constant', cval=0)
 
     def floor_water(self):
-        self.height_map[np.logical_and(self.height_map < self.floor_value, self.trail_map == True)] = 0.0
+        self.height_map[self.height_map < self.floor_value] = 0.0
         self.id_map[self.height_map == 0] = 0
         self.trail_map[self.id_map == 0] = 0
 
@@ -433,7 +433,8 @@ class Surface:
                                 collisions.append((drop.id, curr_id))
                             self.id_map[x, y] = drop.id
                             self.trail_map[x, y] = False
-
+        self.passive_drops.extend(self.new_drops)
+        self.new_drops = []
         return collisions
 
     ## Currently not in use
@@ -562,8 +563,6 @@ class Surface:
                 self.drop_dict.pop(drop_id)
 
     def step(self):
-        self.new_drops = []
-        self.new_drops.extend(self.residual_drops)
         self.start_time = time.time()
 
         self.add_drops(self.num_drops)
@@ -574,7 +573,7 @@ class Surface:
         self.merge_drops()
         self.trim_drops()
         #self.update_height_map_arrs()
-        self.compute_height_map()
+        #self.compute_height_map()
         self.passive_drops.extend(self.new_drops)
         self.steps_so_far += 1
         self.clear_passives()
@@ -583,9 +582,6 @@ class Surface:
     def save(self):
         from src import file_ops as fo
         file_name = fo.choose_file_name(self.args, self.curr_run)
-        if self.args.video:
-            fo.save_as_video("./temp/", fo.choose_file_name(self.args, self.curr_run))
-
         if self.multiprocessing:
             fo.save(fo.choose_file_name(self.args, self.curr_run), self.height_map, self.id_map, self.args)
             print("\rRun " + str(self.curr_run +1) + " out of " + str(self.args.runs) + " is complete.")
@@ -640,4 +636,7 @@ class Surface:
         for p in processes:
             p.join()
 
-        self.save()
+        file_name = fo.choose_file_name(self.args, self.curr_run)
+        fo.generate_graph(file_name, self.graph_data)
+        fo.save_as_video("./temp/", file_name)
+

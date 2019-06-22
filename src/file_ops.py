@@ -182,5 +182,4 @@ def generate_graph(file_name, graph_data):
 
     fig.tight_layout()
 
-    plt.show()
     fig.savefig(file_name + "graph" + ".png")
