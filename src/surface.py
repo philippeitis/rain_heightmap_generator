@@ -527,7 +527,7 @@ class Surface:
                 low_drop.velocity = new_velocity
                 low_drop.update_mass(low_drop.mass + high_drop.mass)
                 self.set_ids(high_drop.id, low_drop.id, delete=True)
-                self.set_ids(low_drop.id, low_drop.id, delete=True)
+                #self.set_ids(low_drop.id, low_drop.id, delete=True)
                 self.delete(high_drop)
                 self.drop_dict.pop(high_drop.id)
                 self.reassert_drop(low_drop)
@@ -635,11 +635,17 @@ class Surface:
         self.smooth_height_map()
         self.height_map[height_map_copy == 0] = 0
 
-    def save_temp_mp(self, queue):
+    @staticmethod
+    def save_temp_mp(queue):
         from src import file_ops as fo
-        while not queue.empty() and self.steps_so_far != self.args.steps:
-            height_map, id_map, color_dict, args, steps_so_far = queue.get()
-            fo.save_temp(height_map, id_map, color_dict, args, steps_so_far)
+        while True:
+            item = queue.get()
+            if item == "kill_process":
+                break
+            else:
+                height_map, id_map, color_dict, args, steps_so_far = item
+                fo.save_temp(height_map, id_map, color_dict, args, steps_so_far)
+                print(steps_so_far)
 
     def make_video(self):
         import src.file_ops as fo
@@ -647,7 +653,8 @@ class Surface:
         import multiprocessing
         q = Queue()
         processes = []
-        for i in range(multiprocessing.cpu_count() - 1):
+        num_processes = multiprocessing.cpu_count() - 1
+        for i in range(num_processes):
             p = Process(target=self.save_temp_mp, args=(q, ))
             processes.append(p)
 
@@ -657,10 +664,12 @@ class Surface:
             if i < len(processes):
                 processes[i].start()
 
+        for i in range(num_processes):
+            q.put("kill_process")
         for p in processes:
             p.join()
 
         file_name = fo.choose_file_name(self.args, self.curr_run)
-        fo.generate_graph(file_name, self.graph_data)
+        #fo.generate_graph(file_name, self.graph_data)
         fo.save_as_video("./temp/", file_name)
 
