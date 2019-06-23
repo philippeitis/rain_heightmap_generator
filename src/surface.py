@@ -47,12 +47,12 @@ class Surface:
         self.floor_value = args.floor_value
         if args.kernel == "dwn":
             self.kernel = np.array([[2 / 27, 1 / 9, 4 / 27],
-                               [2 / 27, 1 / 9, 4 / 27],
-                               [2 / 27, 1 / 9, 4 / 27]])
+                                    [2 / 27, 1 / 9, 4 / 27],
+                                    [2 / 27, 1 / 9, 4 / 27]])
         else:
             self.kernel = np.array([[1 / 9, 1 / 9, 1 / 9],
-                               [1 / 9, 1 / 9, 1 / 9],
-                               [1 / 9, 1 / 9, 1 / 9]])
+                                    [1 / 9, 1 / 9, 1 / 9],
+                                    [1 / 9, 1 / 9, 1 / 9]])
 
         self.passive_drops = []
         self.active_drops = []
@@ -62,9 +62,9 @@ class Surface:
         self.color_dict = {0: (255, 255, 255)}
 
         self.height_map = np.zeros(shape=(self.width, self.height))
-        self.id_map = np.zeros(shape=(self.width, self.height),dtype=int)
+        self.id_map = np.zeros(shape=(self.width, self.height), dtype=int)
         self.trail_map = np.ones(shape=(self.width, self.height), dtype=bool)
-        self.affinity_map = np.reshape(np.random.uniform(size=self.width*self.height), (self.width,self.height))
+        self.affinity_map = np.reshape(np.random.uniform(size=self.width*self.height), (self.width, self.height))
 
         self.start_time = None
         self.multiprocessing = multiprocessing
@@ -75,14 +75,14 @@ class Surface:
         self.graph_data = []
 
     class Droplet:
-        def __init__(self, x, y, mass, drop_id, super, velocity=0, parent_id=None):
+        def __init__(self, x, y, mass, drop_id, surface, velocity=0, parent_id=None):
             self.x = x
             self.y = y
             self.mass = 0
             self.velocity = velocity
             self.direction = 0
             self.t_i = 0
-            self.super = super
+            self.super = surface
 
             # self.path uses different logic from self.hemispheres to calculate radius
             self.path = []
@@ -100,9 +100,11 @@ class Surface:
 
             self.id = drop_id
             if mass > self.super.m_static:
-                self.super.color_dict[drop_id] = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+                self.super.color_dict[drop_id] = (random.randint(0, 255),
+                                                  random.randint(0, 255),
+                                                  random.randint(0, 255))
             else:
-                self.super.color_dict[drop_id] = (255,255,255)
+                self.super.color_dict[drop_id] = (255, 255, 255)
             self.parent_id = parent_id
 
             self.super.drop_dict[drop_id] = self
@@ -114,19 +116,19 @@ class Surface:
             self.super.delete(self)
             self.mass = mass
             if mass > self.super.m_static:
-                print("now active", self.id, self.mass)
                 self.hemispheres = [(self.x, self.y)]
                 self.path = []
                 self.super.active_drops.append(self)
             else:
-                print("now new", self.id, self.mass)
                 self.super.new_drops.append(self)
             self.calculate_radius()
             self.compute_bounding_box()
 
         def calculate_radius(self):
-            # Precalculating avoids excessive computations.
-            self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / self.super.density_water) * self.super.scale_factor * self.super.width
+            # Pre calculating avoids excessive computations.
+            self.radius = np.cbrt((3 / 2) / math.pi * (self.mass / len(self.hemispheres)) / self.super.density_water)\
+                          * self.super.scale_factor * self.super.width
+
             self.rad_sqr = self.radius ** 2
             self.rad_sqr_extended = (self.radius + self.super.attraction_radius) ** 2
             self.delta = self.rad_sqr - self.rad_sqr_extended
@@ -158,7 +160,8 @@ class Surface:
                     next_dirs = (1, 3, 4)
                     new_x += 1
 
-                if (new_x, new_y) in self.hemispheres: # To avoid infinite loops
+                # To avoid infinite loops
+                if (new_x, new_y) in self.hemispheres:
                     break
                 else:
                     self.hemispheres.append((new_x, new_y))
@@ -171,7 +174,7 @@ class Surface:
                 self.path = [(self.x, self.y)]
                 acceleration = (self.mass * self.super.gravity - self.super.friction_constant_force)/self.mass
                 self.velocity = self.velocity + acceleration * self.super.time_step
-                for i in range(math.ceil(self.velocity * self.super.scale_factor * self.super.width)):
+                for i in range(math.ceil(self.velocity * self.super.scale_factor * self.super.width * self.super.time_step)):
                     self.x += self.super.choose_direction(self)
                     self.y += 1
                     self.t_i += 1
@@ -196,7 +199,7 @@ class Surface:
                 self.highest_x = max(self.path, key=lambda t: t[0])[0] + math.ceil(self.radius)
 
         def intersects(self, drop):
-            if drop.get_lowest_y() < self.get_highest_y() or drop.get_highest_y() > self.get_lowest_y():
+            if drop.lowest_y < self.highest_y or drop.highest_y > self.lowest_y:
                 return False
 
             for self_x, self_y in self.hemispheres:
@@ -209,7 +212,8 @@ class Surface:
 
         def residual_probability(self):
             if self.velocity > 0:
-                return min(1, self.super.beta * self.super.time_step / self.super.t_max * min(1, self.t_i / self.super.t_max))
+                return min(1, self.super.beta * self.super.time_step / self.super.t_max *
+                           min(1, self.t_i / self.super.t_max))
             else:
                 return 0
 
@@ -220,8 +224,8 @@ class Surface:
             if len(self.path) != 0:
                 for x, y in self.path:
                     dists_from_center_sqr = np.array([[self.rad_sqr - (x-new_x)**2 + (y-new_y)**2
-                                                      for new_y in range(self.lowest_x,self.highest_x)]
-                                                     for new_x in range(self.lowest_y,self.highest_y)])\
+                                                      for new_y in range(self.lowest_x, self.highest_x)]
+                                                     for new_x in range(self.lowest_y, self.highest_y)])\
                         .reshape((self.highest_x-self.lowest_x, self.highest_y-self.lowest_y))
 
                     dists_from_center_sqr[dists_from_center_sqr < 0] = 0
@@ -233,18 +237,19 @@ class Surface:
             else:
                 for x, y in self.hemispheres:
                     dists_from_center_sqr = np.array([[self.rad_sqr - (x-new_x)**2 + (y-new_y)**2
-                                                      for new_y in range(self.lowest_x,self.highest_x)]
-                                                     for new_x in range(self.lowest_y,self.highest_y)])
+                                                      for new_y in range(self.lowest_x, self.highest_x)]
+                                                     for new_x in range(self.lowest_y, self.highest_y)])
                     print(np.shape(dists_from_center_sqr))
                     dists_from_center_sqr[dists_from_center_sqr < 0] = 0
                     np.add(internal_height_map, np.sqrt(dists_from_center_sqr))
                     internal_height_map_counts[dists_from_center_sqr > 0] += 1
                 internal_height_map_counts[dists_from_center_sqr == 0] = 1
-                return np.divide(internal_height_map,internal_height_map_counts)
+                return np.divide(internal_height_map, internal_height_map_counts)
 
         def get_height(self, x, y):
             if len(self.path) != 0:
-                distance_from_center_sqr = [self.rad_sqr - (x - path_x) ** 2 + (y - path_y) ** 2 for path_x, path_y in self.path]
+                distance_from_center_sqr = [self.rad_sqr - (x - path_x) ** 2 + (y - path_y) ** 2
+                                            for path_x, path_y in self.path]
                 distance_from_center_sqr_pos = [sqrt(x) for x in distance_from_center_sqr if x > 0]
                 length = len(distance_from_center_sqr_pos)
                 if length > 0:
@@ -253,20 +258,21 @@ class Surface:
                     return 0
 
             else:
-                distance_from_center_sqr = [self.rad_sqr - (x - hemi_x) ** 2 + (y - hemi_y) ** 2 for hemi_x, hemi_y in self.hemispheres]
+                distance_from_center_sqr = [self.rad_sqr - (x - hemi_x) ** 2 + (y - hemi_y) ** 2
+                                            for hemi_x, hemi_y in self.hemispheres]
                 distance_from_center_sqr_pos = [sqrt(x) for x in distance_from_center_sqr if x > 0]
                 length = len(distance_from_center_sqr_pos)
                 if length > 0:
                     return sum(distance_from_center_sqr_pos) / length
 
-        def get_height_and_id(self, x, y): # <- This guy sucks down all the processing time.
+        def get_height_and_id(self, x, y):  # <- This guy sucks down all the processing time.
             if self.lowest_x <= x <= self.highest_x and self.lowest_y <= y <= self.highest_y:
                 flag = False
                 if len(self.path) != 0:
-                    ## EVIL EVIL PERFORMANCE HOG
+                    # This sucks up so much computation time smh
                     distance_from_center_sqr = [(x-path_x)*(x-path_x) + (y-path_y)*(y-path_y) for path_x, path_y in
                                                 self.path if y - self.radius <= path_y <= y + self.radius]
-                    #filtered_dist = [dist for dist in distance_from_center_sqr if dist > self.delta]
+                    # filtered_dist = [dist for dist in distance_from_center_sqr if dist > self.delta]
                     summation = 0
                     count = 0
                     for delta_distance in distance_from_center_sqr:
@@ -280,7 +286,7 @@ class Surface:
                         return summation / count, True
                     return 0, flag
 
-                else: # <- Never gets touched
+                else:  # <- Barely gets touched
                     distance_from_center_sqr = [(x-hemi_x)**2 + (y-hemi_y)**2 for hemi_x, hemi_y in self.hemispheres]
                     summation = 0
                     count = 0
@@ -295,7 +301,7 @@ class Surface:
                         return summation / count, True
                     return 0, flag
             else:
-                return 0, self.get_id_at_pos(x,y)
+                return 0, self.get_id_at_pos(x, y)
 
         def get_id_at_pos(self, x, y):
             if len(self.path) != 0:
@@ -319,7 +325,6 @@ class Surface:
 
     def set_ids(self, old_id, new_id, delete=False):
         old_id, new_id = int(old_id), int(new_id)
-        print("old", old_id, "new", new_id)
         if delete:
             self.trail_map[self.id_map == old_id] = True
         if old_id == 0:
@@ -372,8 +377,10 @@ class Surface:
                 mass = np.random.uniform(self.m_min, self.m_max)
             elif self.args.dist == "exp":
                 mass = min(self.m_max, max(self.m_min, np.random.exponential(self.m_avg, 1)))
+            else:
+                raise EnvironmentError("args.dist is not defined to be norm, unif or exp.")
             self.max_id += 1
-            ## Note: Drops add themselves to their arrays.
+            # Note: Drops add themselves to their arrays.
             self.Droplet(random.randint(0, self.width), random.randint(0, self.height), mass, self.max_id, self)
 
     # Iterates over all active drops (which have mass > n) to update their position
@@ -447,7 +454,7 @@ class Surface:
         self.new_drops = []
         return collisions
 
-    ## Currently not in use
+    # Currently not in use
     def update_height_map(self):
         for drop in itertools.chain(self.active_drops, self.new_drops):
             for y in range(drop.lowest_y, drop.highest_y):
@@ -472,7 +479,7 @@ class Surface:
                         if drop.get_id_at_pos(x, y):
                             curr_id = self.id_map[x, y]
                             if curr_id != drop.parent_id and curr_id != 0:
-                                collisions.append((drop.id,curr_id))
+                                collisions.append((drop.id, curr_id))
                             self.id_map[x, y] = drop.id
                             self.trail_map[x, y] = True
 
@@ -493,11 +500,7 @@ class Surface:
             for x in range(drop.lowest_x - self.args.attraction, drop.highest_x + self.args.attraction):
                 if (0 <= y < self.height) and (0 <= x < self.width):
                     new_height, flag = drop.get_height_and_id(x, y)
-                    if self.height_map[x, y] < new_height:
-                        self.height_map[x, y] = new_height
-
                     if flag:
-                        curr_id = self.id_map[x, y]
                         self.id_map[x, y] = drop.id
                         self.trail_map[x, y] = False
 
@@ -507,7 +510,6 @@ class Surface:
         intersecting_drops = self.update_maps()
 
         for a, b in set(intersecting_drops):
-            print("AB:",a,b)
             if a not in reassign_dict.keys():
                 reassign_dict[a] = a
             if b not in reassign_dict.keys():
@@ -519,12 +521,9 @@ class Surface:
             if a in self.drop_dict.keys() and b in self.drop_dict.keys() and a != b:
                 a = self.drop_dict[a]
                 b = self.drop_dict[b]
-                print("MASSES: ", a.mass, b.mass)
-                print("VELOCITIES: ", a.velocity, b.velocity)
 
                 new_velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
                 low_drop, high_drop = (a, b) if a.y > b.y else (b, a)
-                print(new_velocity * self.scale_factor * self.width, low_drop.mass + high_drop.mass)
                 low_drop.velocity = new_velocity
                 low_drop.update_mass(low_drop.mass + high_drop.mass)
                 self.set_ids(high_drop.id, low_drop.id, delete=True)
@@ -533,7 +532,6 @@ class Surface:
                 self.drop_dict.pop(high_drop.id)
                 self.reassert_drop(low_drop)
                 reassign_dict[high_drop.id] = low_drop.id
-                #[high_drop.id] = low_drop
 
     # Deletes drops that are out of bounds
     def trim_drops(self):
@@ -591,8 +589,9 @@ class Surface:
                 self.drop_dict.pop(drop_id)
 
     def step(self):
-        self.new_drops.extend(self.residual_drops)
         self.start_time = time.time()
+
+        self.new_drops.extend(self.residual_drops)
 
         self.add_drops(self.num_drops)
         self.iterate_over_drops()
@@ -601,21 +600,22 @@ class Surface:
             self.leave_residual_droplets()
         self.merge_drops()
         self.trim_drops()
-        #self.update_height_map_arrs()
+        # self.update_height_map_arrs()
         self.compute_height_map()
         self.passive_drops.extend(self.new_drops)
+        self.clear_passives()
+
         self.steps_so_far += 1
-        #self.clear_passives()
         return self.compose_string()
 
     def save(self):
         from src import file_ops as fo
         file_name = fo.choose_file_name(self.args, self.curr_run)
+        if not self.args.video:
+            fo.save(file_name, self.height_map, self.id_map, self.color_dict, self.args)
         if self.multiprocessing:
-            fo.save(fo.choose_file_name(self.args, self.curr_run), self.height_map, self.id_map, self.args)
-            print("\rRun " + str(self.curr_run +1) + " out of " + str(self.args.runs) + " is complete.")
+            print("\rRun " + str(self.curr_run + 1) + " out of " + str(self.args.runs) + " is complete.")
         else:
-            fo.save(file_name, self.height_map, self.id_map, self.args)
             if self.args.runs > 1:
                 print("\rRun " + str(self.curr_run + 1) + " out of " + str(self.args.runs) + " is complete.")
 
@@ -625,11 +625,6 @@ class Surface:
     def save_temp(self):
         from src import file_ops as fo
         fo.save_temp(self.height_map, self.id_map, self.color_dict, self.args, self.steps_so_far)
-
-    def add_old_drops(self):
-        self.new_drops = self.passive_drops
-        self.update_height_map()
-        self.compute_height_map()
 
     def blur_masked(self):
         height_map_copy = np.array(self.height_map, copy=True)

@@ -2,7 +2,7 @@ def parse_arguments():
     import argparse
 
     parser = argparse.ArgumentParser(description='Create the height map for rain on a surface.')
-    parser.add_argument('steps', type=int, help='Number of simulation steps to run') # around 50 time steps is good
+    parser.add_argument('steps', type=int, help='Number of simulation steps to run')  # around 50 time steps is good
 
     parser.add_argument('--imw', dest='width', default=720, type=int,
                         help='Sets the width of the height map and the output file.')
@@ -36,7 +36,7 @@ def parse_arguments():
     parser.add_argument('--residual_ceil', dest='residual_ceil', default=0.3, type=float,
                         help='Upper bound for mass drops will lose to residual drops.')
 
-    parser.add_argument('--kernel', dest='kernel', default="dwn", type=str, choices=['dwn','avg'],
+    parser.add_argument('--kernel', dest='kernel', default="dwn", type=str, choices=['dwn', 'avg'],
                         help='Type of kernel used in smoothing step. '
                              '(dwn for downward trending, avg for averaging kernel)')
 
@@ -69,7 +69,7 @@ def parse_arguments():
     parser.add_argument('--g', dest='g', default=9.81, type=float,
                         help='Gravitational constant (m/s)')
 
-    parser.add_argument('--time', dest='time', default=0.001, type=float,
+    parser.add_argument('--time', dest='time', default=0.005, type=float,
                         help='Duration of each time step (in seconds)')
 
     parser.add_argument('--path', dest='path', default="./", type=str,

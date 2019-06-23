@@ -1,6 +1,6 @@
-## File output
-def save(file_name, height_map, id_map, args):
-    ## TODO: add functionality for saving specific args used as metadata (eg. json)
+# File output
+def save(file_name, height_map, color_dict, id_map, args):
+    # TODO: add functionality for saving specific args used as metadata (eg. json)
 
     fformat = args.format
     file_name = args.path + file_name
@@ -25,7 +25,6 @@ def save(file_name, height_map, id_map, args):
         maximum_drop_size = np.amax(height_map)
         im = PIL.Image.new('RGBA', (args.width, args.height), 0)
         pixels = im.load()
-        color_dict = {0:(255, 255, 255)}
         if not args.color:
             height_map_copy = np.floor(np.copy(height_map) * 255 / maximum_drop_size).astype(int)
             for y in range(args.height):
@@ -35,11 +34,8 @@ def save(file_name, height_map, id_map, args):
             height_map_copy = np.copy(height_map) / maximum_drop_size
             for y in range(args.height):
                 for x in range(args.width):
-                    if args.color:
-                        if id_map[x, y] not in color_dict.keys():
-                            color_dict[id_map[x, y]] = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-                        pixel = color_dict[id_map[x, y]]
-                        pixels[x, y] = tuple([math.floor(height_map_copy[x,y] * x) for x in pixel])
+                    pixel = color_dict[id_map[x, y]]
+                    pixels[x, y] = tuple([math.floor(height_map_copy[x, y] * x) for x in pixel])
         if args.show:
             im.show()
         im.save(file_name + ".png", 'PNG')
@@ -52,9 +48,9 @@ def save(file_name, height_map, id_map, args):
 
 
 def save_temp(height_map, id_map, color_dict, args, curr_step):
-    ## TODO: add functionality for saving specific args used as metadata (eg. json)
+    # TODO: add functionality for saving specific args used as metadata (eg. json)
 
-    file_name = "./temp/" + padded_zeros(args.steps,curr_step) + ".png"
+    file_name = "./temp/" + padded_zeros(args.steps, curr_step) + ".png"
 
     import numpy as np
     import math
@@ -118,7 +114,7 @@ def choose_file_name(args, curr_run):
         name = generate_time_stamp()
 
     if int(args.runs) > 1:
-        name += padded_zeros(args.runs,curr_run)
+        name += padded_zeros(args.runs, curr_run)
 
     return name
 
@@ -135,7 +131,7 @@ def choose_file_name_per_run(args, curr_run):
     return name
 
 
-def save_as_video(folder_name,file_name):
+def save_as_video(folder_name, file_name):
     import cv2
     import os
 

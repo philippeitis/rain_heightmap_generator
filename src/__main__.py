@@ -18,8 +18,7 @@ if __name__ == '__main__':
             sim.single_process(args)
     else:
         import cProfile
-        cProfile
-        cProfile.run('sim.single_process(args)',"data.txt")
+        cProfile.run('sim.single_process(args)', "data.txt")
         import pstats
         p = pstats.Stats('data.txt')
         p.sort_stats('cumulative').print_stats(10)

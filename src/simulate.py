@@ -43,7 +43,7 @@ def single_process(args):
                 if args.video:
                     surface.save_temp()
 
-            for i in range(math.ceil(args.width / 720)):
+            for k in range(math.ceil(args.width / 720)):
                 surface.blur_masked()
 
             surface.save()
